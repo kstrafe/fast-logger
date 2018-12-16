@@ -123,4 +123,3 @@ fn logger_thread<C: Display + Send, W: std::io::Write>(
         }
     }
 }
-
