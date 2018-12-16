@@ -104,7 +104,9 @@ fn logger_thread<C: Display + Send, W: std::io::Write>(
     loop {
         match rx.recv() {
             Ok(msg) => {
-                writeln![writer, "{}: {:03}: {}", Local::now(), msg.0, msg.1];
+                if writeln![writer, "{}: {:03}: {}", Local::now(), msg.0, msg.1].is_err() {
+                    break;
+                }
             }
             Err(RecvError { .. }) => {
                 break;
@@ -121,5 +123,136 @@ fn logger_thread<C: Display + Send, W: std::io::Write>(
                 dropped_messages
             ];
         }
+    }
+}
+
+// ---
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::fmt;
+    use test::{black_box, Bencher};
+
+    enum Log {
+        Static(&'static str),
+        Complex(&'static str, f32, &'static [u8]),
+    }
+
+    impl Display for Log {
+        fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+            match self {
+                Log::Static(str) => write![f, "{}", str],
+                Log::Complex(str, value, list) => {
+                    write![f, "{} {}", str, value]?;
+                    for i in list.iter() {
+                        write![f, "{}", i]?;
+                    }
+                    Ok(())
+                }
+            }
+        }
+    }
+
+    // ---
+
+    #[test]
+    fn send_successful_message() {
+        let (mut logger, thread) = Logger::<Log>::spawn();
+        assert_eq![true, logger.info(Log::Static("Message"))];
+        std::mem::drop(logger);
+        thread.join().unwrap();
+    }
+
+    #[test]
+    fn trace_is_disabled_by_default() {
+        let (mut logger, thread) = Logger::<Log>::spawn();
+        assert_eq![false, logger.trace(Log::Static("Message"))];
+        std::mem::drop(logger);
+        thread.join().unwrap();
+    }
+
+    #[test]
+    fn debug_is_disabled_by_default() {
+        let (mut logger, thread) = Logger::<Log>::spawn();
+        assert_eq![false, logger.debug(Log::Static("Message"))];
+        std::mem::drop(logger);
+        thread.join().unwrap();
+    }
+
+    #[test]
+    fn info_is_enabled_by_default() {
+        let (mut logger, thread) = Logger::<Log>::spawn();
+        assert_eq![true, logger.info(Log::Static("Message"))];
+        std::mem::drop(logger);
+        thread.join().unwrap();
+    }
+
+    #[test]
+    fn warn_is_enabled_by_default() {
+        let (mut logger, thread) = Logger::<Log>::spawn();
+        assert_eq![true, logger.warn(Log::Static("Message"))];
+        std::mem::drop(logger);
+        thread.join().unwrap();
+    }
+
+    #[test]
+    fn error_is_enabled_by_default() {
+        let (mut logger, thread) = Logger::<Log>::spawn();
+        assert_eq![true, logger.error(Log::Static("Message"))];
+        std::mem::drop(logger);
+        thread.join().unwrap();
+    }
+
+    // ---
+
+    #[bench]
+    fn sending_a_message_to_trace_default(b: &mut Bencher) {
+        let (mut logger, thread) = Logger::<Log>::spawn();
+        b.iter(|| {
+            black_box(logger.trace(black_box(Log::Static("Message"))));
+        });
+        std::mem::drop(logger);
+        thread.join();
+    }
+
+    #[bench]
+    fn sending_a_message_to_debug_default(b: &mut Bencher) {
+        let (mut logger, thread) = Logger::<Log>::spawn();
+        b.iter(|| {
+            black_box(logger.trace(black_box(Log::Static("Message"))));
+        });
+        std::mem::drop(logger);
+        thread.join();
+    }
+
+    #[bench]
+    fn sending_a_message_to_info_default(b: &mut Bencher) {
+        let (mut logger, thread) = Logger::<Log>::spawn();
+        b.iter(|| {
+            black_box(logger.info(black_box(Log::Static("Message"))));
+        });
+        std::mem::drop(logger);
+        thread.join();
+    }
+
+    #[bench]
+    fn sending_a_complex_message_trace(b: &mut Bencher) {
+        let (mut logger, thread) = Logger::<Log>::spawn();
+        b.iter(|| {
+            black_box(logger.trace(black_box(Log::Complex("Message", 3.14, &[1, 2, 3]))))
+        });
+        std::mem::drop(logger);
+        thread.join();
+    }
+
+    #[bench]
+    fn sending_a_complex_message_info(b: &mut Bencher) {
+        let (mut logger, thread) = Logger::<Log>::spawn();
+        b.iter(|| {
+            black_box(logger.info(black_box(Log::Complex("Message", 3.14, &[1, 2, 3]))));
+        });
+        std::mem::drop(logger);
+        thread.join();
     }
 }
