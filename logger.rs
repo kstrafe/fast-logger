@@ -276,7 +276,7 @@ mod tests {
             black_box(logger.trace(black_box(Log::Static("Message"))));
         });
         std::mem::drop(logger);
-        thread.join();
+        thread.join().unwrap();
     }
 
     #[bench]
@@ -286,7 +286,7 @@ mod tests {
             black_box(logger.trace(black_box(Log::Static("Message"))));
         });
         std::mem::drop(logger);
-        thread.join();
+        thread.join().unwrap();
     }
 
     #[bench]
@@ -296,7 +296,7 @@ mod tests {
             black_box(logger.info(black_box(Log::Static("Message"))));
         });
         std::mem::drop(logger);
-        thread.join();
+        thread.join().unwrap();
     }
 
     #[bench]
@@ -304,7 +304,7 @@ mod tests {
         let (mut logger, thread) = Logger::<Log>::spawn();
         b.iter(|| black_box(logger.trace(black_box(Log::Complex("Message", 3.14, &[1, 2, 3])))));
         std::mem::drop(logger);
-        thread.join();
+        thread.join().unwrap();
     }
 
     #[bench]
@@ -314,6 +314,6 @@ mod tests {
             black_box(logger.info(black_box(Log::Complex("Message", 3.14, &[1, 2, 3]))));
         });
         std::mem::drop(logger);
-        thread.join();
+        thread.join().unwrap();
     }
 }
