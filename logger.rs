@@ -24,6 +24,13 @@
 //!     // Actual logging
 //!     logger.info(MyMessageEnum::SimpleMessage("Hello world!"));
 //!
+//!     // Various logging levels
+//!     logger.trace(MyMessageEnum::SimpleMessage("Hello world!"));
+//!     logger.debug(MyMessageEnum::SimpleMessage("Hello world!"));
+//!     logger.info(MyMessageEnum::SimpleMessage("Hello world!"));
+//!     logger.warn(MyMessageEnum::SimpleMessage("Hello world!"));
+//!     logger.error(MyMessageEnum::SimpleMessage("Hello world!"));
+//!
 //!     // Teardown
 //!     std::mem::drop(logger);
 //!     thread.join().unwrap();
@@ -114,12 +121,16 @@ impl<C: 'static + Display + Send> LoggerV2Async<C> {
     }
 
     /// Log an error message (level 255)
+    ///
+    /// Does nothing when compiled without debug assertions
     #[cfg(not(debug_assertions))]
-    pub fn trace(&mut self, message: C) -> bool {
+    pub fn trace(&mut self, _: C) -> bool {
         false
     }
 
     /// Log an error message (level 255)
+    ///
+    /// Does nothing when compiled without debug assertions
     #[cfg(debug_assertions)]
     pub fn trace(&mut self, message: C) -> bool {
         self.log(255, message)
