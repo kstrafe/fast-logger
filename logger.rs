@@ -57,6 +57,7 @@ pub type Logger<C> = LoggerV2Async<C>;
 /// the structure or nature of the logging message, thus
 /// making it extremely cheap to send messages to the logger
 /// thread.
+#[derive(Clone)]
 pub struct LoggerV2Async<C: Display + Send> {
     log_channel: mpsc::SyncSender<(u8, C)>,
     log_channel_full_count: Arc<AtomicUsize>,
