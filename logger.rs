@@ -201,7 +201,7 @@ fn logger_thread<C: Display + Send, W: std::io::Write>(
                         }
                     }
                     Err(_poison) => {
-                        writeln![writer, "{}: {:03} [{}], Context specific level lock has been poisoned, exiting logger", Local::now(), 0, "lgr"];
+                        writeln![writer, "{}: {:03} [{}]: Context specific level lock has been poisoned, exiting logger", Local::now(), 0, "lgr"];
                         break;
                     }
                 }
@@ -213,9 +213,10 @@ fn logger_thread<C: Display + Send, W: std::io::Write>(
         let dropped_messages = dropped.swap(0, Ordering::Relaxed);
         if dropped_messages > 0 {
             println![
-                "{}: {:03}: {}, {}={}",
+                "{}: {:03} [{}]: {} {}={}",
                 Local::now(),
                 0,
+                "lgr",
                 "logger dropped messages due to channel overflow",
                 "count",
                 dropped_messages
