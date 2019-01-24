@@ -38,12 +38,14 @@
 //! ```
 use chrono::prelude::*;
 use std::{
+    collections::HashMap,
     fmt::Display,
     marker::Send,
     sync::{
         atomic::{AtomicUsize, Ordering},
         mpsc::{self, RecvError, TrySendError},
         Arc,
+        Mutex,
     },
     thread,
 };
@@ -62,6 +64,7 @@ pub struct LoggerV2Async<C: Display + Send> {
     log_channel: mpsc::SyncSender<(u8, C)>,
     log_channel_full_count: Arc<AtomicUsize>,
     level: Arc<AtomicUsize>,
+    context_specific_level: Arc<Mutex<HashMap<&'static str, u8>>>,
 }
 
 impl<C: 'static + Display + Send> LoggerV2Async<C> {
@@ -79,13 +82,15 @@ impl<C: 'static + Display + Send> LoggerV2Async<C> {
         let full_count = Arc::new(AtomicUsize::new(0));
         let level = Arc::new(AtomicUsize::new(128));
         let ex = std::io::stdout();
+        let context_specific_level = Arc::new(Mutex::new(HashMap::new()));
         (
             Logger {
                 log_channel: tx,
                 log_channel_full_count: full_count.clone(),
                 level,
+                context_specific_level: context_specific_level.clone(),
             },
-            thread::spawn(move || logger_thread(rx, full_count, ex)),
+            thread::spawn(move || logger_thread(rx, full_count, ex, context_specific_level)),
         )
     }
 
@@ -164,10 +169,12 @@ fn logger_thread<C: Display + Send, W: std::io::Write>(
     rx: mpsc::Receiver<(u8, C)>,
     dropped: Arc<AtomicUsize>,
     mut writer: W,
+    context_specific_level: Arc<Mutex<HashMap<&'static str, u8>>>
 ) {
     loop {
         match rx.recv() {
             Ok(msg) => {
+                let lvls = context_specific_level.lock();
                 if writeln![writer, "{}: {:03}: {}", Local::now(), msg.0, msg.1].is_err() {
                     break;
                 }
