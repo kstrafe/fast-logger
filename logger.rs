@@ -44,8 +44,7 @@ use std::{
     sync::{
         atomic::{AtomicUsize, Ordering},
         mpsc::{self, RecvError, TrySendError},
-        Arc,
-        Mutex,
+        Arc, Mutex,
     },
     thread,
 };
@@ -180,7 +179,7 @@ fn logger_thread<C: Display + Send, W: std::io::Write>(
     rx: mpsc::Receiver<(u8, &'static str, C)>,
     dropped: Arc<AtomicUsize>,
     mut writer: W,
-    context_specific_level: Arc<Mutex<HashMap<&'static str, u8>>>
+    context_specific_level: Arc<Mutex<HashMap<&'static str, u8>>>,
 ) {
     loop {
         match rx.recv() {
@@ -190,12 +189,30 @@ fn logger_thread<C: Display + Send, W: std::io::Write>(
                     Ok(lvls) => {
                         if let Some(lvl) = lvls.get(msg.1) {
                             if msg.0 <= *lvl {
-                                if writeln![writer, "{}: {:03} [{}]: {}", Local::now(), msg.0, msg.1, msg.2].is_err() {
+                                if writeln![
+                                    writer,
+                                    "{}: {:03} [{}]: {}",
+                                    Local::now(),
+                                    msg.0,
+                                    msg.1,
+                                    msg.2
+                                ]
+                                .is_err()
+                                {
                                     break;
                                 }
                             }
                         } else {
-                            if writeln![writer, "{}: {:03} [{}]: {}", Local::now(), msg.0, msg.1, msg.2].is_err() {
+                            if writeln![
+                                writer,
+                                "{}: {:03} [{}]: {}",
+                                Local::now(),
+                                msg.0,
+                                msg.1,
+                                msg.2
+                            ]
+                            .is_err()
+                            {
                                 break;
                             }
                         }
@@ -339,7 +356,9 @@ mod tests {
     #[bench]
     fn sending_a_complex_message_trace(b: &mut Bencher) {
         let (mut logger, thread) = Logger::<Log>::spawn();
-        b.iter(|| black_box(logger.trace("tst", black_box(Log::Complex("Message", 3.14, &[1, 2, 3])))));
+        b.iter(|| {
+            black_box(logger.trace("tst", black_box(Log::Complex("Message", 3.14, &[1, 2, 3]))))
+        });
         std::mem::drop(logger);
         thread.join().unwrap();
     }
