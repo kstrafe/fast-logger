@@ -212,7 +212,8 @@ fn logger_thread<C: Display + Send, W: std::io::Write>(
         }
         let dropped_messages = dropped.swap(0, Ordering::Relaxed);
         if dropped_messages > 0 {
-            println![
+            writeln![
+                writer,
                 "{}: {:03} [{}]: {} {}={}",
                 Local::now(),
                 0,
