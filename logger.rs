@@ -61,7 +61,7 @@ pub type Logger<C> = LoggerV2Async<C>;
 /// thread.
 #[derive(Clone)]
 pub struct LoggerV2Async<C: Display + Send> {
-    log_channel: mpsc::SyncSender<(u8, C)>,
+    log_channel: mpsc::SyncSender<(u8, &'static str, C)>,
     log_channel_full_count: Arc<AtomicUsize>,
     level: Arc<AtomicUsize>,
     context_specific_level: Arc<Mutex<HashMap<&'static str, u8>>>,
@@ -108,12 +108,18 @@ impl<C: 'static + Display + Send> LoggerV2Async<C> {
         self.level.store(level as usize, Ordering::Relaxed);
     }
 
+    pub fn set_context_specific_log_level(&mut self, ctx: &'static str, level: u8) {
+        if let Ok(ref mut lvl) = self.context_specific_level.lock() {
+            lvl.insert(ctx, level);
+        }
+    }
+
     /// Generic logging function
     ///
     /// Send a message with a specific log-level.
-    pub fn log(&mut self, level: u8, message: C) -> bool {
+    pub fn log(&mut self, level: u8, ctx: &'static str, message: C) -> bool {
         if level as usize <= self.level.load(Ordering::Relaxed) {
-            match self.log_channel.try_send((level, message)) {
+            match self.log_channel.try_send((level, ctx, message)) {
                 Ok(()) => true,
                 Err(TrySendError::Full(_)) => {
                     self.log_channel_full_count.fetch_add(1, Ordering::Relaxed);
@@ -130,7 +136,7 @@ impl<C: 'static + Display + Send> LoggerV2Async<C> {
     ///
     /// Does nothing when compiled without debug assertions
     #[cfg(not(debug_assertions))]
-    pub fn trace(&mut self, _: C) -> bool {
+    pub fn trace(&mut self, _: &'static str, _: C) -> bool {
         false
     }
 
@@ -138,35 +144,35 @@ impl<C: 'static + Display + Send> LoggerV2Async<C> {
     ///
     /// Does nothing when compiled without debug assertions
     #[cfg(debug_assertions)]
-    pub fn trace(&mut self, message: C) -> bool {
-        self.log(255, message)
+    pub fn trace(&mut self, ctx: &'static str, message: C) -> bool {
+        self.log(255, ctx, message)
     }
 
     /// Log an error message (level 192)
-    pub fn debug(&mut self, message: C) -> bool {
-        self.log(192, message)
+    pub fn debug(&mut self, ctx: &'static str, message: C) -> bool {
+        self.log(192, ctx, message)
     }
 
     /// Log an error message (level 128)
-    pub fn info(&mut self, message: C) -> bool {
-        self.log(128, message)
+    pub fn info(&mut self, ctx: &'static str, message: C) -> bool {
+        self.log(128, ctx, message)
     }
 
     /// Log an error message (level 64)
-    pub fn warn(&mut self, message: C) -> bool {
-        self.log(64, message)
+    pub fn warn(&mut self, ctx: &'static str, message: C) -> bool {
+        self.log(64, ctx, message)
     }
 
     /// Log an error message (level 0)
-    pub fn error(&mut self, message: C) -> bool {
-        self.log(0, message)
+    pub fn error(&mut self, ctx: &'static str, message: C) -> bool {
+        self.log(0, ctx, message)
     }
 }
 
 // ---
 
 fn logger_thread<C: Display + Send, W: std::io::Write>(
-    rx: mpsc::Receiver<(u8, C)>,
+    rx: mpsc::Receiver<(u8, &'static str, C)>,
     dropped: Arc<AtomicUsize>,
     mut writer: W,
     context_specific_level: Arc<Mutex<HashMap<&'static str, u8>>>
@@ -175,8 +181,24 @@ fn logger_thread<C: Display + Send, W: std::io::Write>(
         match rx.recv() {
             Ok(msg) => {
                 let lvls = context_specific_level.lock();
-                if writeln![writer, "{}: {:03}: {}", Local::now(), msg.0, msg.1].is_err() {
-                    break;
+                match lvls {
+                    Ok(lvls) => {
+                        if let Some(lvl) = lvls.get(msg.1) {
+                            if msg.0 <= *lvl {
+                                if writeln![writer, "{}: {:03} [{}]: {}", Local::now(), msg.0, msg.1, msg.2].is_err() {
+                                    break;
+                                }
+                            }
+                        } else {
+                            if writeln![writer, "{}: {:03} [{}]: {}", Local::now(), msg.0, msg.1, msg.2].is_err() {
+                                break;
+                            }
+                        }
+                    }
+                    Err(_poison) => {
+                        writeln![writer, "{}: {:03} [{}], Context specific level lock has been poisoned, exiting logger", Local::now(), 0, "lgr"];
+                        break;
+                    }
                 }
             }
             Err(RecvError { .. }) => {
