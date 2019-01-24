@@ -22,14 +22,14 @@
 //!     let (mut logger, thread) = Logger::spawn();
 //!
 //!     // Actual logging
-//!     logger.info(MyMessageEnum::SimpleMessage("Hello world!"));
+//!     logger.info("ctx", MyMessageEnum::SimpleMessage("Hello world!"));
 //!
 //!     // Various logging levels
-//!     logger.trace(MyMessageEnum::SimpleMessage("Hello world!"));
-//!     logger.debug(MyMessageEnum::SimpleMessage("Hello world!"));
-//!     logger.info(MyMessageEnum::SimpleMessage("Hello world!"));
-//!     logger.warn(MyMessageEnum::SimpleMessage("Hello world!"));
-//!     logger.error(MyMessageEnum::SimpleMessage("Hello world!"));
+//!     logger.trace("ctx", MyMessageEnum::SimpleMessage("Hello world!"));
+//!     logger.debug("ctx", MyMessageEnum::SimpleMessage("Hello world!"));
+//!     logger.info("ctx", MyMessageEnum::SimpleMessage("Hello world!"));
+//!     logger.warn("ctx", MyMessageEnum::SimpleMessage("Hello world!"));
+//!     logger.error("ctx", MyMessageEnum::SimpleMessage("Hello world!"));
 //!
 //!     // Teardown
 //!     std::mem::drop(logger);
@@ -108,6 +108,11 @@ impl<C: 'static + Display + Send> LoggerV2Async<C> {
         self.level.store(level as usize, Ordering::Relaxed);
     }
 
+    /// Sets the log level for a specific context
+    ///
+    /// Whenever the logger receives a message, it will use the context-to-level
+    /// mapping to see if the message should be logged or not.
+    /// Note that this happens after checking the global log level.
     pub fn set_context_specific_log_level(&mut self, ctx: &'static str, level: u8) {
         if let Ok(ref mut lvl) = self.context_specific_level.lock() {
             lvl.insert(ctx, level);
@@ -252,7 +257,7 @@ mod tests {
     #[test]
     fn send_successful_message() {
         let (mut logger, thread) = Logger::<Log>::spawn();
-        assert_eq![true, logger.info(Log::Static("Message"))];
+        assert_eq![true, logger.info("tst", Log::Static("Message"))];
         std::mem::drop(logger);
         thread.join().unwrap();
     }
@@ -260,7 +265,7 @@ mod tests {
     #[test]
     fn trace_is_disabled_by_default() {
         let (mut logger, thread) = Logger::<Log>::spawn();
-        assert_eq![false, logger.trace(Log::Static("Message"))];
+        assert_eq![false, logger.trace("tst", Log::Static("Message"))];
         std::mem::drop(logger);
         thread.join().unwrap();
     }
@@ -268,7 +273,7 @@ mod tests {
     #[test]
     fn debug_is_disabled_by_default() {
         let (mut logger, thread) = Logger::<Log>::spawn();
-        assert_eq![false, logger.debug(Log::Static("Message"))];
+        assert_eq![false, logger.debug("tst", Log::Static("Message"))];
         std::mem::drop(logger);
         thread.join().unwrap();
     }
@@ -276,7 +281,7 @@ mod tests {
     #[test]
     fn info_is_enabled_by_default() {
         let (mut logger, thread) = Logger::<Log>::spawn();
-        assert_eq![true, logger.info(Log::Static("Message"))];
+        assert_eq![true, logger.info("tst", Log::Static("Message"))];
         std::mem::drop(logger);
         thread.join().unwrap();
     }
@@ -284,7 +289,7 @@ mod tests {
     #[test]
     fn warn_is_enabled_by_default() {
         let (mut logger, thread) = Logger::<Log>::spawn();
-        assert_eq![true, logger.warn(Log::Static("Message"))];
+        assert_eq![true, logger.warn("tst", Log::Static("Message"))];
         std::mem::drop(logger);
         thread.join().unwrap();
     }
@@ -292,7 +297,7 @@ mod tests {
     #[test]
     fn error_is_enabled_by_default() {
         let (mut logger, thread) = Logger::<Log>::spawn();
-        assert_eq![true, logger.error(Log::Static("Message"))];
+        assert_eq![true, logger.error("tst", Log::Static("Message"))];
         std::mem::drop(logger);
         thread.join().unwrap();
     }
@@ -303,7 +308,7 @@ mod tests {
     fn sending_a_message_to_trace_default(b: &mut Bencher) {
         let (mut logger, thread) = Logger::<Log>::spawn();
         b.iter(|| {
-            black_box(logger.trace(black_box(Log::Static("Message"))));
+            black_box(logger.trace("tst", black_box(Log::Static("Message"))));
         });
         std::mem::drop(logger);
         thread.join().unwrap();
@@ -313,7 +318,7 @@ mod tests {
     fn sending_a_message_to_debug_default(b: &mut Bencher) {
         let (mut logger, thread) = Logger::<Log>::spawn();
         b.iter(|| {
-            black_box(logger.trace(black_box(Log::Static("Message"))));
+            black_box(logger.debug("tst", black_box(Log::Static("Message"))));
         });
         std::mem::drop(logger);
         thread.join().unwrap();
@@ -323,7 +328,7 @@ mod tests {
     fn sending_a_message_to_info_default(b: &mut Bencher) {
         let (mut logger, thread) = Logger::<Log>::spawn();
         b.iter(|| {
-            black_box(logger.info(black_box(Log::Static("Message"))));
+            black_box(logger.info("tst", black_box(Log::Static("Message"))));
         });
         std::mem::drop(logger);
         thread.join().unwrap();
@@ -332,7 +337,7 @@ mod tests {
     #[bench]
     fn sending_a_complex_message_trace(b: &mut Bencher) {
         let (mut logger, thread) = Logger::<Log>::spawn();
-        b.iter(|| black_box(logger.trace(black_box(Log::Complex("Message", 3.14, &[1, 2, 3])))));
+        b.iter(|| black_box(logger.trace("tst", black_box(Log::Complex("Message", 3.14, &[1, 2, 3])))));
         std::mem::drop(logger);
         thread.join().unwrap();
     }
@@ -341,7 +346,7 @@ mod tests {
     fn sending_a_complex_message_info(b: &mut Bencher) {
         let (mut logger, thread) = Logger::<Log>::spawn();
         b.iter(|| {
-            black_box(logger.info(black_box(Log::Complex("Message", 3.14, &[1, 2, 3]))));
+            black_box(logger.info("tst", black_box(Log::Complex("Message", 3.14, &[1, 2, 3]))));
         });
         std::mem::drop(logger);
         thread.join().unwrap();
