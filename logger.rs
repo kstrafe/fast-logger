@@ -1,5 +1,37 @@
 //! A simple log-level based logger
 //!
+//! # General #
+//!
+//! When spawning a logger, a thread is created and a handle structure returned. This handle can be
+//! copied and shared among threads. All it does is hold some mutexes and atomic references to the
+//! logger. Actually logging pushes the data over an asynchronous channel with size limits.
+//!
+//! The logger requires a `Display` type to be provided so the logger can actually print data. The
+//! reason for this is that it cuts down on serialization cost for the caller, leaving the logger
+//! to serialize numbers into strings and perform other formatting work.
+//!
+//! # Log Levels #
+//!
+//! Logger features two log level controls: per-context and "global". When logging a message, the
+//! global log level is checked, and if the current message has a lower priority than the global
+//! log level, nothing will be sent to the logger.
+//!
+//! Once the logger has received the message, it checks its internal mapping from context to log
+//! level, if the message's log level has a lower priority than the context log level, it is
+//! dropped.
+//!
+//! We normally use the helper functions `trace`, `debug`, `info`, `warn`, and `error`, which have
+//! the corresponding log levels: 255, 192, 128, 64, 0, respectively.
+//!
+//! Trace is disabled with debug_assertions off.
+//!
+//! Note: an `error` message priority 0, and log levels are always unsigned, so an `error` message
+//! can never be filtered.
+//!
+//! # Example #
+//!
+//! Here is an example:
+//!
 //! ```
 //! use universe::libs::logger::Logger;
 //!
