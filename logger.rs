@@ -98,6 +98,9 @@ pub struct LoggerV2Async<C: Display + Send> {
     context_specific_level: Arc<Mutex<HashMap<&'static str, u8>>>,
 }
 
+static CHANNEL_SIZE: usize = 30_000;
+static DEFAULT_LEVEL: u8 = 128;
+
 impl<C: 'static + Display + Send> LoggerV2Async<C> {
     /// Create a logger object and spawn a logging thread
     ///
@@ -109,9 +112,9 @@ impl<C: 'static + Display + Send> LoggerV2Async<C> {
     /// Typically, you only call `spawn` once in an application
     /// since you just want a single logging thread to print stuff.
     pub fn spawn() -> (Logger<C>, thread::JoinHandle<()>) {
-        let (tx, rx) = mpsc::sync_channel(30_000);
+        let (tx, rx) = mpsc::sync_channel(CHANNEL_SIZE);
         let full_count = Arc::new(AtomicUsize::new(0));
-        let level = Arc::new(AtomicUsize::new(128));
+        let level = Arc::new(AtomicUsize::new(DEFAULT_LEVEL as usize));
         let ex = std::io::stdout();
         let context_specific_level = Arc::new(Mutex::new(HashMap::new()));
         (
@@ -121,7 +124,23 @@ impl<C: 'static + Display + Send> LoggerV2Async<C> {
                 level,
                 context_specific_level: context_specific_level.clone(),
             },
-            thread::spawn(move || logger_thread(rx, full_count, ex, context_specific_level)),
+            thread::spawn(move || logger_thread(rx, full_count, ex.lock(), context_specific_level)),
+        )
+    }
+
+    pub fn spawn_with_writer<T: 'static + std::io::Write + Send>(writer: T) -> (Logger<C>, thread::JoinHandle<()>) {
+        let (tx, rx) = mpsc::sync_channel(CHANNEL_SIZE);
+        let full_count = Arc::new(AtomicUsize::new(0));
+        let level = Arc::new(AtomicUsize::new(DEFAULT_LEVEL as usize));
+        let context_specific_level = Arc::new(Mutex::new(HashMap::new()));
+        (
+            Logger {
+                log_channel: tx,
+                log_channel_full_count: full_count.clone(),
+                level,
+                context_specific_level: context_specific_level.clone(),
+            },
+            thread::spawn(move || logger_thread(rx, full_count, writer, context_specific_level)),
         )
     }
 
@@ -292,7 +311,7 @@ fn logger_thread<C: Display + Send, W: std::io::Write>(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::fmt;
+    use std::{fmt, io};
     use test::{black_box, Bencher};
 
     enum Log {
@@ -312,6 +331,16 @@ mod tests {
                     Ok(())
                 }
             }
+        }
+    }
+
+    struct Void {}
+    impl io::Write for Void {
+        fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
+            Ok(buf.len())
+        }
+        fn flush(&mut self) -> io::Result<()> {
+            Ok(())
         }
     }
 
@@ -365,6 +394,15 @@ mod tests {
         thread.join().unwrap();
     }
 
+    #[test]
+    fn custom_writer() {
+        let writer = Void {};
+        let (mut logger, thread) = Logger::<Log>::spawn_with_writer(writer);
+        assert_eq![true, logger.error("tst", Log::Static("Message"))];
+        std::mem::drop(logger);
+        thread.join().unwrap();
+    }
+
     // ---
 
     #[bench]
@@ -410,6 +448,63 @@ mod tests {
     #[bench]
     fn sending_a_complex_message_info(b: &mut Bencher) {
         let (mut logger, thread) = Logger::<Log>::spawn();
+        b.iter(|| {
+            black_box(logger.info("tst", black_box(Log::Complex("Message", 3.14, &[1, 2, 3]))));
+        });
+        std::mem::drop(logger);
+        thread.join().unwrap();
+    }
+
+    // ---
+
+    #[bench]
+    fn custom_writer_sending_a_message_to_trace_default(b: &mut Bencher) {
+        let writer = Void {};
+        let (mut logger, thread) = Logger::<Log>::spawn_with_writer(writer);
+        b.iter(|| {
+            black_box(logger.trace("tst", black_box(Log::Static("Message"))));
+        });
+        std::mem::drop(logger);
+        thread.join().unwrap();
+    }
+
+    #[bench]
+    fn custom_writer_sending_a_message_to_debug_default(b: &mut Bencher) {
+        let writer = Void {};
+        let (mut logger, thread) = Logger::<Log>::spawn_with_writer(writer);
+        b.iter(|| {
+            black_box(logger.debug("tst", black_box(Log::Static("Message"))));
+        });
+        std::mem::drop(logger);
+        thread.join().unwrap();
+    }
+
+    #[bench]
+    fn custom_writer_sending_a_message_to_info_default(b: &mut Bencher) {
+        let writer = Void {};
+        let (mut logger, thread) = Logger::<Log>::spawn_with_writer(writer);
+        b.iter(|| {
+            black_box(logger.info("tst", black_box(Log::Static("Message"))));
+        });
+        std::mem::drop(logger);
+        thread.join().unwrap();
+    }
+
+    #[bench]
+    fn custom_writer_sending_a_complex_message_trace(b: &mut Bencher) {
+        let writer = Void {};
+        let (mut logger, thread) = Logger::<Log>::spawn_with_writer(writer);
+        b.iter(|| {
+            black_box(logger.trace("tst", black_box(Log::Complex("Message", 3.14, &[1, 2, 3]))))
+        });
+        std::mem::drop(logger);
+        thread.join().unwrap();
+    }
+
+    #[bench]
+    fn custom_writer_sending_a_complex_message_info(b: &mut Bencher) {
+        let writer = Void {};
+        let (mut logger, thread) = Logger::<Log>::spawn_with_writer(writer);
         b.iter(|| {
             black_box(logger.info("tst", black_box(Log::Complex("Message", 3.14, &[1, 2, 3]))));
         });
