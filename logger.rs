@@ -213,7 +213,7 @@ fn logger_thread<C: Display + Send, W: std::io::Write>(
     mut writer: W,
     context_specific_level: Arc<Mutex<HashMap<&'static str, u8>>>,
 ) {
-    loop {
+    'outer_loop: loop {
         match rx.recv() {
             Ok(msg) => {
                 let lvls = context_specific_level.lock();
@@ -231,7 +231,7 @@ fn logger_thread<C: Display + Send, W: std::io::Write>(
                                 ]
                                 .is_err()
                                 {
-                                    break;
+                                    break 'outer_loop;
                                 }
                             }
                         } else {
@@ -245,32 +245,44 @@ fn logger_thread<C: Display + Send, W: std::io::Write>(
                             ]
                             .is_err()
                             {
-                                break;
+                                break 'outer_loop;
                             }
                         }
                     }
                     Err(_poison) => {
-                        writeln![writer, "{}: {:03} [{}]: Context specific level lock has been poisoned, exiting logger", Local::now(), 0, "lgr"];
-                        break;
+                        let _ = writeln![writer, "{}: {:03} [{}]: Context specific level lock has been poisoned. Exiting logger", Local::now(), 0, "lgr"];
+                        break 'outer_loop;
                     }
                 }
             }
-            Err(RecvError { .. }) => {
-                break;
+            Err(error @ RecvError { .. }) => {
+                let _ = writeln![
+                    writer,
+                    "{}: {:03} [{}]: Unable to receive message. Exiting logger, reason={}",
+                    Local::now(),
+                    0,
+                    "lgr",
+                    error
+                ];
+                break 'outer_loop;
             }
         }
         let dropped_messages = dropped.swap(0, Ordering::Relaxed);
         if dropped_messages > 0 {
-            writeln![
+            if writeln![
                 writer,
-                "{}: {:03} [{}]: {} {}={}",
+                "{}: {:03} [{}]: {}, {}={}",
                 Local::now(),
                 0,
                 "lgr",
                 "logger dropped messages due to channel overflow",
                 "count",
                 dropped_messages
-            ];
+            ]
+            .is_err()
+            {
+                break 'outer_loop;
+            };
         }
     }
 }
