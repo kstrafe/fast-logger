@@ -281,7 +281,7 @@ fn logger_thread<C: Display + Send, W: std::io::Write>(
                     writer,
                     "{}: {:03} [{}]: Unable to receive message. Exiting logger, reason={}",
                     Local::now(),
-                    0,
+                    128,
                     "logger",
                     error
                 ];
@@ -294,7 +294,7 @@ fn logger_thread<C: Display + Send, W: std::io::Write>(
                 writer,
                 "{}: {:03} [{}]: {}, {}={}",
                 Local::now(),
-                0,
+                64,
                 "logger",
                 "logger dropped messages due to channel overflow",
                 "count",
