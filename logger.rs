@@ -311,14 +311,16 @@ fn logger_thread<C: Display + Send, W: std::io::Write>(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use regex::Regex;
     use std::{fmt, io};
     use test::{black_box, Bencher};
+
+    // ---
 
     enum Log {
         Static(&'static str),
         Complex(&'static str, f32, &'static [u8]),
     }
-
     impl Display for Log {
         fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
             match self {
@@ -334,9 +336,27 @@ mod tests {
         }
     }
 
+    // ---
+
     struct Void {}
     impl io::Write for Void {
         fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
+            Ok(buf.len())
+        }
+        fn flush(&mut self) -> io::Result<()> {
+            Ok(())
+        }
+    }
+
+    // ---
+
+    struct Store {
+        pub store: Arc<Mutex<Vec<u8>>>,
+    }
+    impl io::Write for Store {
+        fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
+            let mut vector = self.store.lock().unwrap();
+            vector.extend(buf);
             Ok(buf.len())
         }
         fn flush(&mut self) -> io::Result<()> {
@@ -401,6 +421,18 @@ mod tests {
         assert_eq![true, logger.error("tst", Log::Static("Message"))];
         std::mem::drop(logger);
         thread.join().unwrap();
+    }
+
+    #[test]
+    fn ensure_proper_message_format() {
+        let store = Arc::new(Mutex::new(vec![]));
+        let writer = Store { store: store.clone() };
+        let (mut logger, thread) = Logger::<Log>::spawn_with_writer(writer);
+        assert_eq![true, logger.error("tst", Log::Static("Message"))];
+        std::mem::drop(logger);
+        thread.join().unwrap();
+        let regex = Regex::new(r"^\d+-\d{2}-\d{2} \d{2}:\d{2}:\d{2}.\d{9} \+\d\d:\d\d: 000 \[tst\]: Message\n").unwrap();
+        assert![regex.is_match(&String::from_utf8(store.lock().unwrap().to_vec()).unwrap())];
     }
 
     // ---
