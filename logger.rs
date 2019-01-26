@@ -543,4 +543,42 @@ mod tests {
         std::mem::drop(logger);
         thread.join().unwrap();
     }
+
+    // ---
+
+    use slog::{o, info, trace, Drain, Level, OwnedKVList, Record};
+    impl Drain for Void {
+        type Ok = ();
+        type Err = ();
+        fn log(
+            &self,
+            record: &Record,
+            values: &OwnedKVList
+        ) -> Result<Self::Ok, Self::Err> {
+            Ok(())
+        }
+    }
+
+    #[bench]
+    fn message_slog_disabled(b: &mut Bencher) {
+        let decorator = slog_term::PlainDecorator::new(Void {});
+        let drain = slog_term::CompactFormat::new(decorator).build().fuse();
+        let drain = slog_async::Async::new(drain).build().fuse();
+        let log = slog::Logger::root(drain, o![]);
+        assert![!log.is_trace_enabled()];
+        b.iter(|| {
+            black_box(trace![log, "{}", black_box("Something may be done")]);
+        });
+    }
+
+    #[bench]
+    fn message_slog_enabled(b: &mut Bencher) {
+        let decorator = slog_term::PlainDecorator::new(Void {});
+        let drain = slog_term::CompactFormat::new(decorator).build().fuse();
+        let drain = slog_async::Async::new(drain).build().fuse();
+        let log = slog::Logger::root(drain, o![]);
+        b.iter(|| {
+            black_box(info![log, "{}", black_box("Something may be done")]);
+        });
+    }
 }
