@@ -128,7 +128,9 @@ impl<C: 'static + Display + Send> LoggerV2Async<C> {
         )
     }
 
-    pub fn spawn_with_writer<T: 'static + std::io::Write + Send>(writer: T) -> (Logger<C>, thread::JoinHandle<()>) {
+    pub fn spawn_with_writer<T: 'static + std::io::Write + Send>(
+        writer: T,
+    ) -> (Logger<C>, thread::JoinHandle<()>) {
         let (tx, rx) = mpsc::sync_channel(CHANNEL_SIZE);
         let full_count = Arc::new(AtomicUsize::new(0));
         let level = Arc::new(AtomicUsize::new(DEFAULT_LEVEL as usize));
@@ -426,12 +428,18 @@ mod tests {
     #[test]
     fn ensure_proper_message_format() {
         let store = Arc::new(Mutex::new(vec![]));
-        let writer = Store { store: store.clone() };
+        let writer = Store {
+            store: store.clone(),
+        };
         let (mut logger, thread) = Logger::<Log>::spawn_with_writer(writer);
         assert_eq![true, logger.error("tst", Log::Static("Message"))];
+        assert_eq![true, logger.error("tst", Log::Static("Second message"))];
         std::mem::drop(logger);
         thread.join().unwrap();
-        let regex = Regex::new(r"^\d+-\d{2}-\d{2} \d{2}:\d{2}:\d{2}.\d{9} \+\d\d:\d\d: 000 \[tst\]: Message\n").unwrap();
+        let regex = Regex::new(
+            r"^\d+-\d{2}-\d{2} \d{2}:\d{2}:\d{2}.\d{9} (\+|-)\d\d:\d\d: 000 \[tst\]: Message\n",
+        )
+        .unwrap();
         assert![regex.is_match(&String::from_utf8(store.lock().unwrap().to_vec()).unwrap())];
     }
 
@@ -493,6 +501,10 @@ mod tests {
     fn custom_writer_sending_a_message_to_trace_default(b: &mut Bencher) {
         let writer = Void {};
         let (mut logger, thread) = Logger::<Log>::spawn_with_writer(writer);
+        assert![!logger.trace(
+            "tst",
+            Log::Static("Trace should be disabled during benchmark")
+        )];
         b.iter(|| {
             black_box(logger.trace("tst", black_box(Log::Static("Message"))));
         });
@@ -504,6 +516,10 @@ mod tests {
     fn custom_writer_sending_a_message_to_debug_default(b: &mut Bencher) {
         let writer = Void {};
         let (mut logger, thread) = Logger::<Log>::spawn_with_writer(writer);
+        assert![logger.debug(
+            "tst",
+            Log::Static("Debug should be disabled during benchmark")
+        )];
         b.iter(|| {
             black_box(logger.debug("tst", black_box(Log::Static("Message"))));
         });
@@ -526,6 +542,10 @@ mod tests {
     fn custom_writer_sending_a_complex_message_trace(b: &mut Bencher) {
         let writer = Void {};
         let (mut logger, thread) = Logger::<Log>::spawn_with_writer(writer);
+        assert![!logger.trace(
+            "tst",
+            Log::Static("Trace should be disabled during benchmark")
+        )];
         b.iter(|| {
             black_box(logger.trace("tst", black_box(Log::Complex("Message", 3.14, &[1, 2, 3]))))
         });
@@ -546,15 +566,11 @@ mod tests {
 
     // ---
 
-    use slog::{o, info, trace, Drain, Level, OwnedKVList, Record};
+    use slog::{info, o, trace, Drain, Level, OwnedKVList, Record};
     impl Drain for Void {
         type Ok = ();
         type Err = ();
-        fn log(
-            &self,
-            record: &Record,
-            values: &OwnedKVList
-        ) -> Result<Self::Ok, Self::Err> {
+        fn log(&self, record: &Record, values: &OwnedKVList) -> Result<Self::Ok, Self::Err> {
             Ok(())
         }
     }
@@ -567,7 +583,7 @@ mod tests {
         let log = slog::Logger::root(drain, o![]);
         assert![!log.is_trace_enabled()];
         b.iter(|| {
-            black_box(trace![log, "{}", black_box("Something may be done")]);
+            black_box(trace![log, "{}", black_box("Message")]);
         });
     }
 
@@ -578,7 +594,7 @@ mod tests {
         let drain = slog_async::Async::new(drain).build().fuse();
         let log = slog::Logger::root(drain, o![]);
         b.iter(|| {
-            black_box(info![log, "{}", black_box("Something may be done")]);
+            black_box(info![log, "{}", black_box("Message")]);
         });
     }
 }
