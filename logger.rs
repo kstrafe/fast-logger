@@ -503,7 +503,7 @@ mod tests {
         let (mut logger, thread) = Logger::<Log>::spawn_with_writer(writer);
         assert![!logger.trace(
             "tst",
-            Log::Static("Trace should be disabled during benchmark")
+            Log::Static("Trace should be disabled during benchmark (due to compiler optimization)")
         )];
         b.iter(|| {
             black_box(logger.trace("tst", black_box(Log::Static("Message"))));
@@ -516,9 +516,11 @@ mod tests {
     fn custom_writer_sending_a_message_to_debug_default(b: &mut Bencher) {
         let writer = Void {};
         let (mut logger, thread) = Logger::<Log>::spawn_with_writer(writer);
-        assert![logger.debug(
+        assert![!logger.debug(
             "tst",
-            Log::Static("Debug should be disabled during benchmark")
+            Log::Static(
+                "Debug should be disabled during benchmark (due to the standard log level)"
+            )
         )];
         b.iter(|| {
             black_box(logger.debug("tst", black_box(Log::Static("Message"))));
@@ -570,13 +572,13 @@ mod tests {
     impl Drain for Void {
         type Ok = ();
         type Err = ();
-        fn log(&self, record: &Record, values: &OwnedKVList) -> Result<Self::Ok, Self::Err> {
+        fn log(&self, _: &Record, _: &OwnedKVList) -> Result<Self::Ok, Self::Err> {
             Ok(())
         }
     }
 
     #[bench]
-    fn message_slog_disabled(b: &mut Bencher) {
+    fn message_slog_disabled_by_compiler(b: &mut Bencher) {
         let decorator = slog_term::PlainDecorator::new(Void {});
         let drain = slog_term::CompactFormat::new(decorator).build().fuse();
         let drain = slog_async::Async::new(drain).build().fuse();
@@ -584,6 +586,32 @@ mod tests {
         assert![!log.is_trace_enabled()];
         b.iter(|| {
             black_box(trace![log, "{}", black_box("Message")]);
+        });
+    }
+
+    #[bench]
+    fn message_slog_disabled_dynamically_on_async_side(b: &mut Bencher) {
+        let decorator = slog_term::PlainDecorator::new(Void {});
+        let drain = slog_term::CompactFormat::new(decorator).build().fuse();
+        let drain = slog::LevelFilter::new(drain, Level::Critical).fuse();
+        let drain = slog_async::Async::new(drain).build().fuse();
+        let log = slog::Logger::root(drain, o![]);
+        assert![log.is_info_enabled()];
+        b.iter(|| {
+            black_box(info![log, "{}", black_box("Message")]);
+        });
+    }
+
+    #[bench]
+    fn message_slog_disabled_dynamically_on_caller_side(b: &mut Bencher) {
+        let decorator = slog_term::PlainDecorator::new(Void {});
+        let drain = slog_term::CompactFormat::new(decorator).build().fuse();
+        let drain = slog_async::Async::new(drain).build().fuse();
+        let drain = slog::LevelFilter::new(drain, Level::Critical).fuse();
+        let log = slog::Logger::root(drain, o![]);
+        assert![!log.is_info_enabled()];
+        b.iter(|| {
+            black_box(info![log, "{}", black_box("Message")]);
         });
     }
 
