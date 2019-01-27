@@ -160,6 +160,11 @@ impl<C: 'static + Display + Send> LoggerV2Async<C> {
         self.level.store(level as usize, Ordering::Relaxed);
     }
 
+    /// Retrieve the current global log level value
+    pub fn get_log_level(&self) -> u8 {
+        self.level.load(Ordering::Relaxed) as u8
+    }
+
     /// Sets the log level for a specific context
     ///
     /// Whenever the logger receives a message, it will use the context-to-level
