@@ -68,6 +68,11 @@
 //!     thread.join().unwrap();
 //! }
 //! ```
+//! # Why the logging functions are not generic #
+//! Why aren't the logging functions generic over `Display`?
+//! Because that would require a reference to be sent to a `&'static Display`, which is hard to do
+//! when this `Display` is built from a string read from a socket. This is because we need to - at
+//! compile time - give the channel a type so that it can see the size of the type.
 use chrono::prelude::*;
 use std::{
     collections::HashMap,
@@ -128,6 +133,10 @@ impl<C: 'static + Display + Send> LoggerV2Async<C> {
         )
     }
 
+    /// Create a logger object with a specific writer
+    ///
+    /// See `spawn` for more information regarding spawning. This function providing the logger a
+    /// writer, which makes the logger use any arbitrary writing interface.
     pub fn spawn_with_writer<T: 'static + std::io::Write + Send>(
         writer: T,
     ) -> (Logger<C>, thread::JoinHandle<()>) {
