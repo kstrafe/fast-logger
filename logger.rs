@@ -248,6 +248,24 @@ fn logger_thread<C: Display + Send, W: std::io::Write>(
     mut writer: W,
     context_specific_level: Arc<Mutex<HashMap<&'static str, u8>>>,
 ) {
+    let items = {
+        use chrono::format::{Fixed::*, Item::*, Numeric::*, Pad::*};
+        [
+            Fixed(ShortMonthName),
+            Literal(" "),
+            Numeric(Day, None),
+            Literal(" "),
+            Numeric(Year, None),
+            Literal(" "),
+            Numeric(Hour, Zero),
+            Literal(":"),
+            Numeric(Minute, Zero),
+            Literal(":"),
+            Numeric(Second, Zero),
+            Fixed(Nanosecond9),
+            Fixed(TimezoneOffset),
+        ]
+    };
     'outer_loop: loop {
         match rx.recv() {
             Ok(msg) => {
@@ -259,7 +277,7 @@ fn logger_thread<C: Display + Send, W: std::io::Write>(
                                 if writeln![
                                     writer,
                                     "{}: {:03} [{}]: {}",
-                                    Local::now(),
+                                    Local::now().format_with_items(items.iter().cloned()),
                                     msg.0,
                                     msg.1,
                                     msg.2
@@ -273,7 +291,7 @@ fn logger_thread<C: Display + Send, W: std::io::Write>(
                             if writeln![
                                 writer,
                                 "{}: {:03} [{}]: {}",
-                                Local::now(),
+                                Local::now().format_with_items(items.iter().cloned()),
                                 msg.0,
                                 msg.1,
                                 msg.2
@@ -294,7 +312,7 @@ fn logger_thread<C: Display + Send, W: std::io::Write>(
                 let _ = writeln![
                     writer,
                     "{}: {:03} [{}]: Unable to receive message. Exiting logger, reason={}",
-                    Local::now(),
+                    Local::now().format_with_items(items.iter().cloned()),
                     128,
                     "logger",
                     error
@@ -307,7 +325,7 @@ fn logger_thread<C: Display + Send, W: std::io::Write>(
             if writeln![
                 writer,
                 "{}: {:03} [{}]: {}, {}={}",
-                Local::now(),
+                Local::now().format_with_items(items.iter().cloned()),
                 64,
                 "logger",
                 "logger dropped messages due to channel overflow",
@@ -451,7 +469,7 @@ mod tests {
         std::mem::drop(logger);
         thread.join().unwrap();
         let regex = Regex::new(
-            r"^\d+-\d{2}-\d{2} \d{2}:\d{2}:\d{2}.\d{9} (\+|-)\d\d:\d\d: 000 \[tst\]: Message\n",
+            r"^(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec) \d{1,2} \d+ \d{2}:\d{2}:\d{2}.\d{9}(\+|-)\d{4}: 000 \[tst\]: Message\n",
         )
         .unwrap();
         assert![regex.is_match(&String::from_utf8(store.lock().unwrap().to_vec()).unwrap())];
