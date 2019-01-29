@@ -279,16 +279,18 @@ fn do_write<C: Display + Send, W: std::io::Write>(
     let msg = format!["{}", msg];
 
     let mut newlines = 1;
+    let mut last_is_line = false;
     for ch in msg.chars() {
         if ch == '\n' {
             newlines += 1;
+            last_is_line = true;
+        } else {
+            last_is_line = false;
         }
     }
 
     if newlines > 1 {
-        let mut last = 0;
         for (idx, line) in msg.lines().enumerate() {
-            last = idx;
             writeln![
                 writer,
                 "{}: {:03} {} [{:0width$}/{}]: {}",
@@ -301,8 +303,12 @@ fn do_write<C: Display + Send, W: std::io::Write>(
                 width = count_digits_base_10(newlines),
             ]?;
         }
-        if last == 0 {
-            writeln![writer, "{}: {:03} {} [{}/{}]: ", now, lvl, ctx, newlines, newlines]?;
+        if last_is_line {
+            writeln![
+                writer,
+                "{}: {:03} {} [{}/{}]: ",
+                now, lvl, ctx, newlines, newlines
+            ]?;
         }
     } else {
         writeln![writer, "{}: {:03} {}: {}", now, lvl, ctx, msg,]?;
@@ -560,6 +566,26 @@ mod tests {
         thread.join().unwrap();
         let regex = Regex::new(
             r#"^(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec) \d{1,2} \d+ \d{2}:\d{2}:\d{2}.\d{9}(\+|-)\d{4}: 000 tst \[1/3\]: Message\n(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec) \d{1,2} \d+ \d{2}:\d{2}:\d{2}.\d{9}(\+|-)\d{4}: 000 tst \[2/3\]: Part\n(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec) \d{1,2} \d+ \d{2}:\d{2}:\d{2}.\d{9}(\+|-)\d{4}: 000 tst \[3/3\]: 2\n"#,
+        )
+        .unwrap();
+        assert![
+            regex.is_match(&String::from_utf8(store.lock().unwrap().to_vec()).unwrap()),
+            String::from_utf8(store.lock().unwrap().to_vec()).unwrap()
+        ];
+    }
+
+    #[test]
+    fn multiple_lines_count_correctly_trailing() {
+        let store = Arc::new(Mutex::new(vec![]));
+        let writer = Store {
+            store: store.clone(),
+        };
+        let (mut logger, thread) = Logger::<Log>::spawn_with_writer(writer);
+        assert_eq![true, logger.error("tst", Log::Static("Message\nPart\n2\n"))];
+        std::mem::drop(logger);
+        thread.join().unwrap();
+        let regex = Regex::new(
+            r#"^(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec) \d{1,2} \d+ \d{2}:\d{2}:\d{2}.\d{9}(\+|-)\d{4}: 000 tst \[1/4\]: Message\n(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec) \d{1,2} \d+ \d{2}:\d{2}:\d{2}.\d{9}(\+|-)\d{4}: 000 tst \[2/4\]: Part\n(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec) \d{1,2} \d+ \d{2}:\d{2}:\d{2}.\d{9}(\+|-)\d{4}: 000 tst \[3/4\]: 2\n(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec) \d{1,2} \d+ \d{2}:\d{2}:\d{2}.\d{9}(\+|-)\d{4}: 000 tst \[4/4\]: \n"#,
         )
         .unwrap();
         assert![
