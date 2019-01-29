@@ -286,7 +286,9 @@ fn do_write<C: Display + Send, W: std::io::Write>(
     }
 
     if newlines > 1 {
+        let mut last = 0;
         for (idx, line) in msg.lines().enumerate() {
+            last = idx;
             writeln![
                 writer,
                 "{}: {:03} {} [{:0width$}/{}]: {}",
@@ -298,6 +300,9 @@ fn do_write<C: Display + Send, W: std::io::Write>(
                 line,
                 width = count_digits_base_10(newlines),
             ]?;
+        }
+        if last == 0 {
+            writeln![writer, "{}: {:03} {} [{}/{}]: ", now, lvl, ctx, newlines, newlines]?;
         }
     } else {
         writeln![writer, "{}: {:03} {}: {}", now, lvl, ctx, msg,]?;
@@ -505,6 +510,27 @@ mod tests {
         )
         .unwrap();
         assert![regex.is_match(&String::from_utf8(store.lock().unwrap().to_vec()).unwrap())];
+    }
+
+    #[test]
+    fn ensure_proper_message_format_line_ending_with_newline() {
+        let store = Arc::new(Mutex::new(vec![]));
+        let writer = Store {
+            store: store.clone(),
+        };
+        let (mut logger, thread) = Logger::<Log>::spawn_with_writer(writer);
+        assert_eq![true, logger.error("tst", Log::Static("Message\n"))];
+        std::mem::drop(logger);
+        thread.join().unwrap();
+        let regex = Regex::new(
+            r"^(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec) \d{1,2} \d+ \d{2}:\d{2}:\d{2}.\d{9}(\+|-)\d{4}: 000 tst \[1/2\]: Message
+(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec) \d{1,2} \d+ \d{2}:\d{2}:\d{2}.\d{9}(\+|-)\d{4}: 000 tst \[2/2\]: \n",
+        )
+        .unwrap();
+        assert![
+            regex.is_match(&String::from_utf8(store.lock().unwrap().to_vec()).unwrap()),
+            String::from_utf8(store.lock().unwrap().to_vec()).unwrap()
+        ];
     }
 
     #[test]
