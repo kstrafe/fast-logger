@@ -289,7 +289,7 @@ fn do_write<C: Display + Send, W: std::io::Write>(
         for (idx, line) in msg.lines().enumerate() {
             writeln![
                 writer,
-                "{}: {:03} [{}][{:0width$}/{}]: {}",
+                "{}: {:03} {} [{:0width$}/{}]: {}",
                 now,
                 lvl,
                 ctx,
@@ -300,7 +300,7 @@ fn do_write<C: Display + Send, W: std::io::Write>(
             ]?;
         }
     } else {
-        writeln![writer, "{}: {:03} [{}]: {}", now, lvl, ctx, msg,]?;
+        writeln![writer, "{}: {:03} {}: {}", now, lvl, ctx, msg,]?;
     }
     Ok(())
 }
@@ -501,7 +501,7 @@ mod tests {
         std::mem::drop(logger);
         thread.join().unwrap();
         let regex = Regex::new(
-            r"^(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec) \d{1,2} \d+ \d{2}:\d{2}:\d{2}.\d{9}(\+|-)\d{4}: 000 \[tst\]: Message\n",
+            r"^(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec) \d{1,2} \d+ \d{2}:\d{2}:\d{2}.\d{9}(\+|-)\d{4}: 000 tst: Message\n",
         )
         .unwrap();
         assert![regex.is_match(&String::from_utf8(store.lock().unwrap().to_vec()).unwrap())];
@@ -518,7 +518,7 @@ mod tests {
         std::mem::drop(logger);
         thread.join().unwrap();
         let regex = Regex::new(
-            r#"^(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec) \d{1,2} \d+ \d{2}:\d{2}:\d{2}.\d{9}(\+|-)\d{4}: 000 \[tst\]\[1/3\]: Message\n(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec) \d{1,2} \d+ \d{2}:\d{2}:\d{2}.\d{9}(\+|-)\d{4}: 000 \[tst\]\[2/3\]: Part\n(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec) \d{1,2} \d+ \d{2}:\d{2}:\d{2}.\d{9}(\+|-)\d{4}: 000 \[tst\]\[3/3\]: 2\n"#,
+            r#"^(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec) \d{1,2} \d+ \d{2}:\d{2}:\d{2}.\d{9}(\+|-)\d{4}: 000 tst \[1/3\]: Message\n(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec) \d{1,2} \d+ \d{2}:\d{2}:\d{2}.\d{9}(\+|-)\d{4}: 000 tst \[2/3\]: Part\n(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec) \d{1,2} \d+ \d{2}:\d{2}:\d{2}.\d{9}(\+|-)\d{4}: 000 tst \[3/3\]: 2\n"#,
         )
         .unwrap();
         assert![
