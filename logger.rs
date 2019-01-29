@@ -243,8 +243,8 @@ impl<C: 'static + Display + Send> LoggerV2Async<C> {
 // ---
 
 fn count_digits_base_10(mut number: usize) -> usize {
-    let mut digits = 0;
-    while number > 0 {
+    let mut digits = 1;
+    while number >= 10 {
         number /= 10;
         digits += 1;
     }
@@ -492,6 +492,21 @@ mod tests {
         assert_eq![true, logger.error("tst", Log::Static("Message"))];
         std::mem::drop(logger);
         thread.join().unwrap();
+    }
+
+    #[test]
+    fn count_digits() {
+        for i in 0..10 {
+            assert_eq![1, count_digits_base_10(i)];
+        }
+        for i in 10..100 {
+            assert_eq![2, count_digits_base_10(i)];
+        }
+        for i in &[100usize, 123, 321, 980] {
+            assert_eq![3, count_digits_base_10(*i)];
+        }
+        assert_eq![4, count_digits_base_10(1248)];
+        assert_eq![10, count_digits_base_10(01329583467)];
     }
 
     #[test]
