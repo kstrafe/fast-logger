@@ -242,15 +242,24 @@ impl<C: 'static + Display + Send> LoggerV2Async<C> {
 
 // ---
 
-fn logger_thread<C: Display + Send, W: std::io::Write>(
-    rx: mpsc::Receiver<(u8, &'static str, C)>,
-    dropped: Arc<AtomicUsize>,
-    mut writer: W,
-    context_specific_level: Arc<Mutex<HashMap<&'static str, u8>>>,
-) {
-    let items = {
+fn count_digits_base_10(mut number: usize) -> usize {
+    let mut digits = 0;
+    while number > 0 {
+        number /= 10;
+        digits += 1;
+    }
+    digits
+}
+
+fn do_write<C: Display + Send, W: std::io::Write>(
+    writer: &mut W,
+    lvl: u8,
+    ctx: &'static str,
+    msg: C,
+) -> std::io::Result<()> {
+    const ITEMS: &[chrono::format::Item] = {
         use chrono::format::{Fixed::*, Item::*, Numeric::*, Pad::*};
-        [
+        &[
             Fixed(ShortMonthName),
             Literal(" "),
             Numeric(Day, None),
@@ -266,6 +275,42 @@ fn logger_thread<C: Display + Send, W: std::io::Write>(
             Fixed(TimezoneOffset),
         ]
     };
+    let now = Local::now().format_with_items(ITEMS.iter().cloned());
+    let msg = format!["{}", msg];
+
+    let mut newlines = 1;
+    for ch in msg.chars() {
+        if ch == '\n' {
+            newlines += 1;
+        }
+    }
+
+    if newlines > 1 {
+        for (idx, line) in msg.lines().enumerate() {
+            writeln![
+                writer,
+                "{}: {:03} [{}][{:0width$}/{}]: {}",
+                now,
+                lvl,
+                ctx,
+                idx + 1,
+                newlines,
+                line,
+                width = count_digits_base_10(newlines),
+            ]?;
+        }
+    } else {
+        writeln![writer, "{}: {:03} [{}]: {}", now, lvl, ctx, msg,]?;
+    }
+    Ok(())
+}
+
+fn logger_thread<C: Display + Send, W: std::io::Write>(
+    rx: mpsc::Receiver<(u8, &'static str, C)>,
+    dropped: Arc<AtomicUsize>,
+    mut writer: W,
+    context_specific_level: Arc<Mutex<HashMap<&'static str, u8>>>,
+) {
     'outer_loop: loop {
         match rx.recv() {
             Ok(msg) => {
@@ -274,64 +319,51 @@ fn logger_thread<C: Display + Send, W: std::io::Write>(
                     Ok(lvls) => {
                         if let Some(lvl) = lvls.get(msg.1) {
                             if msg.0 <= *lvl {
-                                if writeln![
-                                    writer,
-                                    "{}: {:03} [{}]: {}",
-                                    Local::now().format_with_items(items.iter().cloned()),
-                                    msg.0,
-                                    msg.1,
-                                    msg.2
-                                ]
-                                .is_err()
-                                {
+                                if do_write(&mut writer, msg.0, msg.1, msg.2).is_err() {
                                     break 'outer_loop;
                                 }
                             }
                         } else {
-                            if writeln![
-                                writer,
-                                "{}: {:03} [{}]: {}",
-                                Local::now().format_with_items(items.iter().cloned()),
-                                msg.0,
-                                msg.1,
-                                msg.2
-                            ]
-                            .is_err()
-                            {
+                            if do_write(&mut writer, msg.0, msg.1, msg.2).is_err() {
                                 break 'outer_loop;
                             }
                         }
                     }
                     Err(_poison) => {
-                        let _ = writeln![writer, "{}: {:03} [{}]: Context specific level lock has been poisoned. Exiting logger", Local::now(), 0, "logger"];
+                        let _ = do_write(
+                            &mut writer,
+                            0,
+                            "logger",
+                            "Context specific level lock has been poisoned. Exiting logger",
+                        );
                         break 'outer_loop;
                     }
                 }
             }
             Err(error @ RecvError { .. }) => {
-                let _ = writeln![
-                    writer,
-                    "{}: {:03} [{}]: Unable to receive message. Exiting logger, reason={}",
-                    Local::now().format_with_items(items.iter().cloned()),
-                    128,
+                let _ = do_write(
+                    &mut writer,
+                    0,
                     "logger",
-                    error
-                ];
+                    format![
+                        "Unable to receive message. Exiting logger, reason={}",
+                        error
+                    ],
+                );
                 break 'outer_loop;
             }
         }
         let dropped_messages = dropped.swap(0, Ordering::Relaxed);
         if dropped_messages > 0 {
-            if writeln![
-                writer,
-                "{}: {:03} [{}]: {}, {}={}",
-                Local::now().format_with_items(items.iter().cloned()),
+            if do_write(
+                &mut writer,
                 64,
                 "logger",
-                "logger dropped messages due to channel overflow",
-                "count",
-                dropped_messages
-            ]
+                format![
+                    "Logger dropped messages due to channel overflow, count={}",
+                    dropped_messages
+                ],
+            )
             .is_err()
             {
                 break 'outer_loop;
@@ -473,6 +505,26 @@ mod tests {
         )
         .unwrap();
         assert![regex.is_match(&String::from_utf8(store.lock().unwrap().to_vec()).unwrap())];
+    }
+
+    #[test]
+    fn multiple_lines_count_correctly() {
+        let store = Arc::new(Mutex::new(vec![]));
+        let writer = Store {
+            store: store.clone(),
+        };
+        let (mut logger, thread) = Logger::<Log>::spawn_with_writer(writer);
+        assert_eq![true, logger.error("tst", Log::Static("Message\nPart\n2"))];
+        std::mem::drop(logger);
+        thread.join().unwrap();
+        let regex = Regex::new(
+            r#"^(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec) \d{1,2} \d+ \d{2}:\d{2}:\d{2}.\d{9}(\+|-)\d{4}: 000 \[tst\]\[1/3\]: Message\n(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec) \d{1,2} \d+ \d{2}:\d{2}:\d{2}.\d{9}(\+|-)\d{4}: 000 \[tst\]\[2/3\]: Part\n(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec) \d{1,2} \d+ \d{2}:\d{2}:\d{2}.\d{9}(\+|-)\d{4}: 000 \[tst\]\[3/3\]: 2\n"#,
+        )
+        .unwrap();
+        assert![
+            regex.is_match(&String::from_utf8(store.lock().unwrap().to_vec()).unwrap()),
+            String::from_utf8(store.lock().unwrap().to_vec()).unwrap()
+        ];
     }
 
     // ---
