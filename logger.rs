@@ -329,15 +329,12 @@ fn logger_thread<C: Display + Send, W: std::io::Write>(
                 match lvls {
                     Ok(lvls) => {
                         if let Some(lvl) = lvls.get(msg.1) {
-                            if msg.0 <= *lvl {
-                                if do_write(&mut writer, msg.0, msg.1, msg.2).is_err() {
-                                    break 'outer_loop;
-                                }
-                            }
-                        } else {
-                            if do_write(&mut writer, msg.0, msg.1, msg.2).is_err() {
+                            if msg.0 <= *lvl && do_write(&mut writer, msg.0, msg.1, msg.2).is_err()
+                            {
                                 break 'outer_loop;
                             }
+                        } else if do_write(&mut writer, msg.0, msg.1, msg.2).is_err() {
+                            break 'outer_loop;
                         }
                     }
                     Err(_poison) => {
@@ -365,8 +362,8 @@ fn logger_thread<C: Display + Send, W: std::io::Write>(
             }
         }
         let dropped_messages = dropped.swap(0, Ordering::Relaxed);
-        if dropped_messages > 0 {
-            if do_write(
+        if dropped_messages > 0
+            && do_write(
                 &mut writer,
                 64,
                 "logger",
@@ -376,9 +373,8 @@ fn logger_thread<C: Display + Send, W: std::io::Write>(
                 ],
             )
             .is_err()
-            {
-                break 'outer_loop;
-            };
+        {
+            break 'outer_loop;
         }
     }
 }
