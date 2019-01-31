@@ -129,7 +129,10 @@ impl<C: 'static + Display + Send> LoggerV2Async<C> {
                 level,
                 context_specific_level: context_specific_level.clone(),
             },
-            thread::spawn(move || logger_thread(rx, full_count, ex.lock(), context_specific_level)),
+            thread::Builder::new()
+                .name("logger".to_string())
+                .spawn(move || logger_thread(rx, full_count, ex.lock(), context_specific_level))
+                .unwrap(),
         )
     }
 
@@ -151,7 +154,10 @@ impl<C: 'static + Display + Send> LoggerV2Async<C> {
                 level,
                 context_specific_level: context_specific_level.clone(),
             },
-            thread::spawn(move || logger_thread(rx, full_count, writer, context_specific_level)),
+            thread::Builder::new()
+                .name("logger".to_string())
+                .spawn(move || logger_thread(rx, full_count, writer, context_specific_level))
+                .unwrap(),
         )
     }
 
