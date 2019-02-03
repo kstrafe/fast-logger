@@ -1,0 +1,12 @@
+[package]
+name = "logger"
+version = "0.0.0"
+authors = ["Erlend Hofstad Langseth <3rlendhl@gmail.com>", "Kevin Robert Stravers <macocio@gmail.com>"]
+edition = "2018"
+
+[lib]
+name = "logger"
+path = "lib.rs"
+
+[dependencies]
+chrono = "0.4.6"
