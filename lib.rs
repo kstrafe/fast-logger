@@ -33,7 +33,7 @@
 //! Here is an example:
 //!
 //! ```
-//! use universe::libs::logger::Logger;
+//! use logger::Logger;
 //!
 //! // You need to define your own message type
 //! enum MyMessageEnum {
@@ -73,6 +73,9 @@
 //! Because that would require a reference to be sent to a `&'static Display`, which is hard to do
 //! when this `Display` is built from a string read from a socket. This is because we need to - at
 //! compile time - give the channel a type so that it can see the size of the type.
+#![feature(test)]
+extern crate test;
+
 use chrono::prelude::*;
 use std::{
     collections::HashMap,
