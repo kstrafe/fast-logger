@@ -98,8 +98,8 @@
 //!     // Setup
 //!     let (mut logger, thread) = Logger::spawn();
 //!
-//!     // Set the log level of `ctx` to 128, this filters
-//!     // All future log levels 129-255 out.
+//!     // Set the log level of `ctx` to 70, this filters
+//!     // All future log levels 71-255 out.
 //!     logger.set_context_specific_log_level("ctx", 70);
 //!
 //!     // This gets printed, because `warn` logs at level 64 <= 70
