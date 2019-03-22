@@ -73,6 +73,7 @@
 //! Because that would require a reference to be sent to a `&'static Display`, which is hard to do
 //! when this `Display` is built from a string read from a socket. This is because we need to - at
 //! compile time - give the channel a type so that it can see the size of the type.
+//!
 //! # Example with log levels #
 //!
 //! Here is an example where we set a context specific log level.
@@ -113,6 +114,40 @@
 //!
 //!     // This gets printed, because the context is different
 //!     logger.log(128, "ctx*", MyMessageEnum::SimpleMessage("4"));
+//!
+//!     // Teardown
+//!     std::mem::drop(logger);
+//!     thread.join().unwrap();
+//! }
+//! ```
+//!
+//! # Example with just strings #
+//!
+//! If you really don't care about formatting overhead on the caller's side, you can just use a
+//! [String] as the message type.
+//!
+//! ```
+//! use logger::Logger;
+//!
+//! fn main() {
+//!     // Setup
+//!     let (mut logger, thread) = Logger::spawn();
+//!
+//!     // Set the log level of `ctx` to 70, this filters
+//!     // All future log levels 71-255 out.
+//!     logger.set_context_specific_log_level("ctx", 70);
+//!
+//!     // This gets printed, because `warn` logs at level 64 <= 70
+//!     logger.warn("ctx", format!("1"));
+//!
+//!     // This gets printed, because 50 <= 70
+//!     logger.log(50, "ctx", format!("2"));
+//!
+//!     // This does not get printed, because !(80 <= 70)
+//!     logger.log(80, "ctx", format!("3"));
+//!
+//!     // This gets printed, because the context is different
+//!     logger.log(128, "ctx*", format!("4"));
 //!
 //!     // Teardown
 //!     std::mem::drop(logger);
