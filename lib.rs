@@ -73,6 +73,52 @@
 //! Because that would require a reference to be sent to a `&'static Display`, which is hard to do
 //! when this `Display` is built from a string read from a socket. This is because we need to - at
 //! compile time - give the channel a type so that it can see the size of the type.
+//! # Example with log levels #
+//!
+//! Here is an example where we set a context specific log level.
+//!
+//! ```
+//! use logger::Logger;
+//!
+//! // You need to define your own message type
+//! enum MyMessageEnum {
+//!     SimpleMessage(&'static str)
+//! }
+//!
+//! // It needs to implement std::fmt::Display
+//! impl std::fmt::Display for MyMessageEnum {
+//!     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+//!         match self {
+//!             MyMessageEnum::SimpleMessage(string) => write![f, "{}", string],
+//!         }
+//!     }
+//! }
+//!
+//! fn main() {
+//!     // Setup
+//!     let (mut logger, thread) = Logger::spawn();
+//!
+//!     // Set the log level of `ctx` to 128, this filters
+//!     // All future log levels 129-255 out.
+//!     logger.set_context_specific_log_level("ctx", 70);
+//!
+//!     // This gets printed, because `warn` logs at level 64 <= 70
+//!     logger.warn("ctx", MyMessageEnum::SimpleMessage("1"));
+//!
+//!     // This gets printed, because 50 <= 70
+//!     logger.log(50, "ctx", MyMessageEnum::SimpleMessage("2"));
+//!
+//!     // This does not get printed, because !(80 <= 70)
+//!     logger.log(80, "ctx", MyMessageEnum::SimpleMessage("3"));
+//!
+//!     // This gets printed, because the context is different
+//!     logger.log(128, "ctx*", MyMessageEnum::SimpleMessage("4"));
+//!
+//!     // Teardown
+//!     std::mem::drop(logger);
+//!     thread.join().unwrap();
+//! }
+//! ```
 #![feature(test)]
 extern crate test;
 
