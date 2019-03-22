@@ -803,6 +803,17 @@ mod tests {
         thread.join().unwrap();
     }
 
+    #[bench]
+    fn custom_writer_sending_a_complex_format_message_info(b: &mut Bencher) {
+        let writer = Void {};
+        let (mut logger, thread) = Logger::<String>::spawn_with_writer(writer);
+        b.iter(|| {
+            black_box(logger.info("tst", black_box(format!["Message {} {:?}", 3.14, &[1, 2, 3]])));
+        });
+        std::mem::drop(logger);
+        thread.join().unwrap();
+    }
+
     // ---
 
     use slog::{info, o, trace, Drain, Level, OwnedKVList, Record};
