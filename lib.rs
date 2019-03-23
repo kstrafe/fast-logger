@@ -329,6 +329,7 @@ impl<C: 'static + Display + Send> LoggerV2Async<C> {
         self.log(0, ctx, message)
     }
 }
+
 impl<C: 'static + Display + Send + From<String>> LoggerV2Async<C> {
     pub fn make_writer(&mut self, ctx: &'static str, level: u8) -> impl std::fmt::Write + '_ {
         struct Writer<'a, C: Display + Send + From<String>> {
@@ -548,6 +549,19 @@ mod tests {
     }
 
     // ---
+
+    #[test]
+    fn send_simple_string() {
+        use std::fmt::Write;
+        let (mut logger, thread) = Logger::<String>::spawn();
+        assert_eq![true, logger.info("tst", "Message".into())];
+        let mut writer = logger.make_writer("tst*", 128);
+        write![writer, "Message 2"].unwrap();
+        std::mem::drop(writer);
+        std::mem::drop(logger);
+        thread.join().unwrap();
+    }
+
 
     #[test]
     fn send_successful_message() {
