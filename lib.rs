@@ -346,7 +346,7 @@ impl<C: 'static + Display + Send + From<String>> LoggerV2Async<C> {
         Writer {
             logger: self,
             ctx,
-            level
+            level,
         }
     }
 }
@@ -561,7 +561,6 @@ mod tests {
         std::mem::drop(logger);
         thread.join().unwrap();
     }
-
 
     #[test]
     fn send_successful_message() {
@@ -842,7 +841,10 @@ mod tests {
         let writer = Void {};
         let (mut logger, thread) = Logger::<String>::spawn_with_writer(writer);
         b.iter(|| {
-            black_box(logger.info("tst", black_box(format!["Message {} {:?}", 3.14, &[1, 2, 3]])));
+            black_box(logger.info(
+                "tst",
+                black_box(format!["Message {} {:?}", 3.14, &[1, 2, 3]]),
+            ));
         });
         std::mem::drop(logger);
         thread.join().unwrap();
