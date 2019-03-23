@@ -329,16 +329,16 @@ impl<C: 'static + Display + Send> LoggerV2Async<C> {
         self.log(0, ctx, message)
     }
 }
-impl LoggerV2Async<String> {
+impl<C: 'static + Display + Send + From<String>> LoggerV2Async<C> {
     pub fn make_writer(&mut self, ctx: &'static str, level: u8) -> impl std::fmt::Write + '_ {
-        struct Writer<'a> {
-            logger: &'a mut Logger<String>,
+        struct Writer<'a, C: Display + Send + From<String>> {
+            logger: &'a mut Logger<C>,
             ctx: &'static str,
             level: u8,
         }
-        impl<'a> std::fmt::Write for Writer<'a> {
+        impl<'a, C: 'static + Display + Send + From<String>> std::fmt::Write for Writer<'a, C> {
             fn write_str(&mut self, s: &str) -> Result<(), std::fmt::Error> {
-                self.logger.log(self.level, self.ctx, s.into());
+                self.logger.log(self.level, self.ctx, s.to_string().into());
                 Ok(())
             }
         }
