@@ -51,7 +51,7 @@
 //!
 //! fn main() {
 //!     // Setup
-//!     let (mut logger, thread) = Logger::spawn();
+//!     let (mut logger, thread) = Logger::<MyMessageEnum>::spawn();
 //!
 //!     // Actual logging
 //!     logger.info("ctx", MyMessageEnum::SimpleMessage("Hello world!"));
@@ -97,7 +97,7 @@
 //!
 //! fn main() {
 //!     // Setup
-//!     let (mut logger, thread) = Logger::spawn();
+//!     let (mut logger, thread) = Logger::<MyMessageEnum>::spawn();
 //!
 //!     // Set the log level of `ctx` to 70, this filters
 //!     // All future log levels 71-255 out.
@@ -131,7 +131,7 @@
 //!
 //! fn main() {
 //!     // Setup
-//!     let (mut logger, thread) = Logger::spawn();
+//!     let (mut logger, thread) = Logger::<String>::spawn();
 //!
 //!     // Set the log level of `ctx` to 70, this filters
 //!     // All future log levels 71-255 out.
@@ -278,9 +278,9 @@ impl<C: 'static + Display + Send> LoggerV2Async<C> {
     /// Generic logging function
     ///
     /// Send a message with a specific log-level.
-    pub fn log(&mut self, level: u8, ctx: &'static str, message: C) -> bool {
+    pub fn log(&mut self, level: u8, ctx: &'static str, message: impl Into<C>) -> bool {
         if level as usize <= self.level.load(Ordering::Relaxed) {
-            match self.log_channel.try_send((level, ctx, message)) {
+            match self.log_channel.try_send((level, ctx, message.into())) {
                 Ok(()) => true,
                 Err(TrySendError::Full(_)) => {
                     self.log_channel_full_count.fetch_add(1, Ordering::Relaxed);
@@ -297,7 +297,7 @@ impl<C: 'static + Display + Send> LoggerV2Async<C> {
     ///
     /// Does nothing when compiled without debug assertions
     #[cfg(not(debug_assertions))]
-    pub fn trace(&mut self, _: &'static str, _: C) -> bool {
+    pub fn trace(&mut self, _: &'static str, _: impl Into<C>) -> bool {
         false
     }
 
@@ -305,27 +305,27 @@ impl<C: 'static + Display + Send> LoggerV2Async<C> {
     ///
     /// Does nothing when compiled without debug assertions
     #[cfg(debug_assertions)]
-    pub fn trace(&mut self, ctx: &'static str, message: C) -> bool {
+    pub fn trace(&mut self, ctx: &'static str, message: impl Into<C>) -> bool {
         self.log(255, ctx, message)
     }
 
     /// Log an error message (level 192)
-    pub fn debug(&mut self, ctx: &'static str, message: C) -> bool {
+    pub fn debug(&mut self, ctx: &'static str, message: impl Into<C>) -> bool {
         self.log(192, ctx, message)
     }
 
     /// Log an error message (level 128)
-    pub fn info(&mut self, ctx: &'static str, message: C) -> bool {
+    pub fn info(&mut self, ctx: &'static str, message: impl Into<C>) -> bool {
         self.log(128, ctx, message)
     }
 
     /// Log an error message (level 64)
-    pub fn warn(&mut self, ctx: &'static str, message: C) -> bool {
+    pub fn warn(&mut self, ctx: &'static str, message: impl Into<C>) -> bool {
         self.log(64, ctx, message)
     }
 
     /// Log an error message (level 0)
-    pub fn error(&mut self, ctx: &'static str, message: C) -> bool {
+    pub fn error(&mut self, ctx: &'static str, message: impl Into<C>) -> bool {
         self.log(0, ctx, message)
     }
 }
@@ -339,7 +339,7 @@ impl<C: 'static + Display + Send + From<String>> LoggerV2Async<C> {
         }
         impl<'a, C: 'static + Display + Send + From<String>> std::fmt::Write for Writer<'a, C> {
             fn write_str(&mut self, s: &str) -> Result<(), std::fmt::Error> {
-                self.logger.log(self.level, self.ctx, s.to_string().into());
+                self.logger.log(self.level, self.ctx, s.to_string());
                 Ok(())
             }
         }
@@ -554,7 +554,7 @@ mod tests {
     fn send_simple_string() {
         use std::fmt::Write;
         let (mut logger, thread) = Logger::<String>::spawn();
-        assert_eq![true, logger.info("tst", "Message".into())];
+        assert_eq![true, logger.info("tst", "Message")];
         let mut writer = logger.make_writer("tst*", 128);
         write![writer, "Message 2"].unwrap();
         std::mem::drop(writer);
