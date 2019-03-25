@@ -51,7 +51,7 @@
 //!
 //! fn main() {
 //!     // Setup
-//!     let (mut logger, thread) = Logger::<MyMessageEnum>::spawn();
+//!     let mut logger = Logger::<MyMessageEnum>::spawn();
 //!
 //!     // Actual logging
 //!     logger.info("ctx", MyMessageEnum::SimpleMessage("Hello world!"));
@@ -62,10 +62,6 @@
 //!     logger.info("ctx", MyMessageEnum::SimpleMessage("Hello world!"));
 //!     logger.warn("ctx", MyMessageEnum::SimpleMessage("Hello world!"));
 //!     logger.error("ctx", MyMessageEnum::SimpleMessage("Hello world!"));
-//!
-//!     // Teardown
-//!     std::mem::drop(logger);
-//!     thread.join().unwrap();
 //! }
 //! ```
 //! # Why the logging functions are not generic #
@@ -97,7 +93,7 @@
 //!
 //! fn main() {
 //!     // Setup
-//!     let (mut logger, thread) = Logger::<MyMessageEnum>::spawn();
+//!     let mut logger = Logger::<MyMessageEnum>::spawn();
 //!
 //!     // Set the log level of `ctx` to 70, this filters
 //!     // All future log levels 71-255 out.
@@ -114,10 +110,6 @@
 //!
 //!     // This gets printed, because the context is different
 //!     logger.log(128, "ctx*", MyMessageEnum::SimpleMessage("4"));
-//!
-//!     // Teardown
-//!     std::mem::drop(logger);
-//!     thread.join().unwrap();
 //! }
 //! ```
 //!
@@ -131,7 +123,7 @@
 //!
 //! fn main() {
 //!     // Setup
-//!     let (mut logger, thread) = Logger::<String>::spawn();
+//!     let mut logger = Logger::<String>::spawn();
 //!
 //!     // Set the log level of `ctx` to 70, this filters
 //!     // All future log levels 71-255 out.
@@ -148,10 +140,6 @@
 //!
 //!     // This gets printed, because the context is different
 //!     logger.log(128, "ctx*", format!("4"));
-//!
-//!     // Teardown
-//!     std::mem::drop(logger);
-//!     thread.join().unwrap();
 //! }
 //! ```
 #![feature(test)]
@@ -167,7 +155,7 @@ use std::{
         mpsc::{self, RecvError, TrySendError},
         Arc, Mutex,
     },
-    thread,
+    thread::{self, JoinHandle},
 };
 
 pub type Logger<C> = LoggerV2Async<C>;
@@ -181,11 +169,28 @@ pub type Logger<C> = LoggerV2Async<C>;
 /// thread.
 #[derive(Clone)]
 pub struct LoggerV2Async<C: Display + Send> {
+    // Explicitly first so it's the first to drop
     log_channel: mpsc::SyncSender<(u8, &'static str, C)>,
-    log_channel_full_count: Arc<AtomicUsize>,
-    level: Arc<AtomicUsize>,
     context_specific_level: Arc<Mutex<HashMap<&'static str, u8>>>,
+    level: Arc<AtomicUsize>,
+    log_channel_full_count: Arc<AtomicUsize>,
+    thread_handle: Arc<AutoJoinHandle>,
 }
+
+// ---
+
+/// Wrapper for [JoinHandle], joins on [drop]
+struct AutoJoinHandle {
+    thread: Option<JoinHandle<()>>,
+}
+
+impl Drop for AutoJoinHandle {
+    fn drop(&mut self) {
+        self.thread.take().map(JoinHandle::join);
+    }
+}
+
+// ---
 
 static CHANNEL_SIZE: usize = 30_000;
 static DEFAULT_LEVEL: u8 = 128;
@@ -200,49 +205,62 @@ impl<C: 'static + Display + Send> LoggerV2Async<C> {
     ///
     /// Typically, you only call `spawn` once in an application
     /// since you just want a single logging thread to print stuff.
-    pub fn spawn() -> (Logger<C>, thread::JoinHandle<()>) {
+    pub fn spawn() -> Logger<C> {
         let (tx, rx) = mpsc::sync_channel(CHANNEL_SIZE);
         let full_count = Arc::new(AtomicUsize::new(0));
+        let full_count_clone = full_count.clone();
         let level = Arc::new(AtomicUsize::new(DEFAULT_LEVEL as usize));
         let ex = std::io::stdout();
         let context_specific_level = Arc::new(Mutex::new(HashMap::new()));
-        (
-            Logger {
-                log_channel: tx,
-                log_channel_full_count: full_count.clone(),
-                level,
-                context_specific_level: context_specific_level.clone(),
-            },
-            thread::Builder::new()
-                .name("logger".to_string())
-                .spawn(move || logger_thread(rx, full_count, ex.lock(), context_specific_level))
-                .unwrap(),
-        )
+        let context_specific_level_clone = context_specific_level.clone();
+        let logger_thread = thread::Builder::new()
+            .name("logger".to_string())
+            .spawn(move || {
+                logger_thread(
+                    rx,
+                    full_count_clone,
+                    ex.lock(),
+                    context_specific_level_clone,
+                )
+            })
+            .unwrap();
+        Logger {
+            thread_handle: Arc::new(AutoJoinHandle {
+                thread: Some(logger_thread),
+            }),
+            log_channel: tx,
+            log_channel_full_count: full_count,
+            level,
+            context_specific_level,
+        }
     }
 
     /// Create a logger object with a specific writer
     ///
     /// See `spawn` for more information regarding spawning. This function providing the logger a
     /// writer, which makes the logger use any arbitrary writing interface.
-    pub fn spawn_with_writer<T: 'static + std::io::Write + Send>(
-        writer: T,
-    ) -> (Logger<C>, thread::JoinHandle<()>) {
+    pub fn spawn_with_writer<T: 'static + std::io::Write + Send>(writer: T) -> Logger<C> {
         let (tx, rx) = mpsc::sync_channel(CHANNEL_SIZE);
         let full_count = Arc::new(AtomicUsize::new(0));
+        let full_count_clone = full_count.clone();
         let level = Arc::new(AtomicUsize::new(DEFAULT_LEVEL as usize));
         let context_specific_level = Arc::new(Mutex::new(HashMap::new()));
-        (
-            Logger {
-                log_channel: tx,
-                log_channel_full_count: full_count.clone(),
-                level,
-                context_specific_level: context_specific_level.clone(),
-            },
-            thread::Builder::new()
-                .name("logger".to_string())
-                .spawn(move || logger_thread(rx, full_count, writer, context_specific_level))
-                .unwrap(),
-        )
+        let context_specific_level_clone = context_specific_level.clone();
+        let logger_thread = thread::Builder::new()
+            .name("logger".to_string())
+            .spawn(move || {
+                logger_thread(rx, full_count_clone, writer, context_specific_level_clone)
+            })
+            .unwrap();
+        Logger {
+            thread_handle: Arc::new(AutoJoinHandle {
+                thread: Some(logger_thread),
+            }),
+            log_channel: tx,
+            log_channel_full_count: full_count,
+            level,
+            context_specific_level,
+        }
     }
 
     /// The log-level is an 8-bit variable that is shared among
@@ -553,70 +571,54 @@ mod tests {
     #[test]
     fn send_simple_string() {
         use std::fmt::Write;
-        let (mut logger, thread) = Logger::<String>::spawn();
+        let mut logger = Logger::<String>::spawn();
         assert_eq![true, logger.info("tst", "Message")];
         let mut writer = logger.make_writer("tst*", 128);
         write![writer, "Message 2"].unwrap();
         std::mem::drop(writer);
-        std::mem::drop(logger);
-        thread.join().unwrap();
     }
 
     #[test]
     fn send_successful_message() {
-        let (mut logger, thread) = Logger::<Log>::spawn();
+        let mut logger = Logger::<Log>::spawn();
         assert_eq![true, logger.info("tst", Log::Static("Message"))];
-        std::mem::drop(logger);
-        thread.join().unwrap();
     }
 
     #[test]
     fn trace_is_disabled_by_default() {
-        let (mut logger, thread) = Logger::<Log>::spawn();
+        let mut logger = Logger::<Log>::spawn();
         assert_eq![false, logger.trace("tst", Log::Static("Message"))];
-        std::mem::drop(logger);
-        thread.join().unwrap();
     }
 
     #[test]
     fn debug_is_disabled_by_default() {
-        let (mut logger, thread) = Logger::<Log>::spawn();
+        let mut logger = Logger::<Log>::spawn();
         assert_eq![false, logger.debug("tst", Log::Static("Message"))];
-        std::mem::drop(logger);
-        thread.join().unwrap();
     }
 
     #[test]
     fn info_is_enabled_by_default() {
-        let (mut logger, thread) = Logger::<Log>::spawn();
+        let mut logger = Logger::<Log>::spawn();
         assert_eq![true, logger.info("tst", Log::Static("Message"))];
-        std::mem::drop(logger);
-        thread.join().unwrap();
     }
 
     #[test]
     fn warn_is_enabled_by_default() {
-        let (mut logger, thread) = Logger::<Log>::spawn();
+        let mut logger = Logger::<Log>::spawn();
         assert_eq![true, logger.warn("tst", Log::Static("Message"))];
-        std::mem::drop(logger);
-        thread.join().unwrap();
     }
 
     #[test]
     fn error_is_enabled_by_default() {
-        let (mut logger, thread) = Logger::<Log>::spawn();
+        let mut logger = Logger::<Log>::spawn();
         assert_eq![true, logger.error("tst", Log::Static("Message"))];
-        std::mem::drop(logger);
-        thread.join().unwrap();
     }
 
     #[test]
     fn custom_writer() {
         let writer = Void {};
-        let (mut logger, thread) = Logger::<Log>::spawn_with_writer(writer);
+        let mut logger = Logger::<Log>::spawn_with_writer(writer);
         assert_eq![true, logger.error("tst", Log::Static("Message"))];
-        std::mem::drop(logger);
-        thread.join().unwrap();
     }
 
     #[test]
@@ -640,11 +642,9 @@ mod tests {
         let writer = Store {
             store: store.clone(),
         };
-        let (mut logger, thread) = Logger::<Log>::spawn_with_writer(writer);
+        let mut logger = Logger::<Log>::spawn_with_writer(writer);
         assert_eq![true, logger.error("tst", Log::Static("Message"))];
         assert_eq![true, logger.error("tst", Log::Static("Second message"))];
-        std::mem::drop(logger);
-        thread.join().unwrap();
         let regex = Regex::new(
             r"^(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec) \d{1,2} \d+ \d{2}:\d{2}:\d{2}.\d{9}(\+|-)\d{4}: 000 tst: Message\n",
         )
@@ -658,10 +658,8 @@ mod tests {
         let writer = Store {
             store: store.clone(),
         };
-        let (mut logger, thread) = Logger::<Log>::spawn_with_writer(writer);
+        let mut logger = Logger::<Log>::spawn_with_writer(writer);
         assert_eq![true, logger.error("tst", Log::Static("Message\n"))];
-        std::mem::drop(logger);
-        thread.join().unwrap();
         let regex = Regex::new(
             r"^(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec) \d{1,2} \d+ \d{2}:\d{2}:\d{2}.\d{9}(\+|-)\d{4}: 000 tst \[1/2\]: Message
 (Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec) \d{1,2} \d+ \d{2}:\d{2}:\d{2}.\d{9}(\+|-)\d{4}: 000 tst \[2/2\]: \n",
@@ -679,10 +677,8 @@ mod tests {
         let writer = Store {
             store: store.clone(),
         };
-        let (mut logger, thread) = Logger::<Log>::spawn_with_writer(writer);
+        let mut logger = Logger::<Log>::spawn_with_writer(writer);
         assert_eq![true, logger.error("tst", Log::Static("Message\nPart\n2"))];
-        std::mem::drop(logger);
-        thread.join().unwrap();
         let regex = Regex::new(
             r#"^(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec) \d{1,2} \d+ \d{2}:\d{2}:\d{2}.\d{9}(\+|-)\d{4}: 000 tst \[1/3\]: Message\n(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec) \d{1,2} \d+ \d{2}:\d{2}:\d{2}.\d{9}(\+|-)\d{4}: 000 tst \[2/3\]: Part\n(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec) \d{1,2} \d+ \d{2}:\d{2}:\d{2}.\d{9}(\+|-)\d{4}: 000 tst \[3/3\]: 2\n"#,
         )
@@ -699,10 +695,8 @@ mod tests {
         let writer = Store {
             store: store.clone(),
         };
-        let (mut logger, thread) = Logger::<Log>::spawn_with_writer(writer);
+        let mut logger = Logger::<Log>::spawn_with_writer(writer);
         assert_eq![true, logger.error("tst", Log::Static("Message\nPart\n2\n"))];
-        std::mem::drop(logger);
-        thread.join().unwrap();
         let regex = Regex::new(
             r#"^(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec) \d{1,2} \d+ \d{2}:\d{2}:\d{2}.\d{9}(\+|-)\d{4}: 000 tst \[1/4\]: Message\n(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec) \d{1,2} \d+ \d{2}:\d{2}:\d{2}.\d{9}(\+|-)\d{4}: 000 tst \[2/4\]: Part\n(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec) \d{1,2} \d+ \d{2}:\d{2}:\d{2}.\d{9}(\+|-)\d{4}: 000 tst \[3/4\]: 2\n(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec) \d{1,2} \d+ \d{2}:\d{2}:\d{2}.\d{9}(\+|-)\d{4}: 000 tst \[4/4\]: \n"#,
         )
@@ -717,52 +711,42 @@ mod tests {
 
     #[bench]
     fn sending_a_message_to_trace_default(b: &mut Bencher) {
-        let (mut logger, thread) = Logger::<Log>::spawn();
+        let mut logger = Logger::<Log>::spawn();
         b.iter(|| {
             black_box(logger.trace("tst", black_box(Log::Static("Message"))));
         });
-        std::mem::drop(logger);
-        thread.join().unwrap();
     }
 
     #[bench]
     fn sending_a_message_to_debug_default(b: &mut Bencher) {
-        let (mut logger, thread) = Logger::<Log>::spawn();
+        let mut logger = Logger::<Log>::spawn();
         b.iter(|| {
             black_box(logger.debug("tst", black_box(Log::Static("Message"))));
         });
-        std::mem::drop(logger);
-        thread.join().unwrap();
     }
 
     #[bench]
     fn sending_a_message_to_info_default(b: &mut Bencher) {
-        let (mut logger, thread) = Logger::<Log>::spawn();
+        let mut logger = Logger::<Log>::spawn();
         b.iter(|| {
             black_box(logger.info("tst", black_box(Log::Static("Message"))));
         });
-        std::mem::drop(logger);
-        thread.join().unwrap();
     }
 
     #[bench]
     fn sending_a_complex_message_trace(b: &mut Bencher) {
-        let (mut logger, thread) = Logger::<Log>::spawn();
+        let mut logger = Logger::<Log>::spawn();
         b.iter(|| {
             black_box(logger.trace("tst", black_box(Log::Complex("Message", 3.14, &[1, 2, 3]))))
         });
-        std::mem::drop(logger);
-        thread.join().unwrap();
     }
 
     #[bench]
     fn sending_a_complex_message_info(b: &mut Bencher) {
-        let (mut logger, thread) = Logger::<Log>::spawn();
+        let mut logger = Logger::<Log>::spawn();
         b.iter(|| {
             black_box(logger.info("tst", black_box(Log::Complex("Message", 3.14, &[1, 2, 3]))));
         });
-        std::mem::drop(logger);
-        thread.join().unwrap();
     }
 
     // ---
@@ -770,7 +754,7 @@ mod tests {
     #[bench]
     fn custom_writer_sending_a_message_to_trace_default(b: &mut Bencher) {
         let writer = Void {};
-        let (mut logger, thread) = Logger::<Log>::spawn_with_writer(writer);
+        let mut logger = Logger::<Log>::spawn_with_writer(writer);
         assert![!logger.trace(
             "tst",
             Log::Static("Trace should be disabled during benchmark (due to compiler optimization)")
@@ -778,14 +762,12 @@ mod tests {
         b.iter(|| {
             black_box(logger.trace("tst", black_box(Log::Static("Message"))));
         });
-        std::mem::drop(logger);
-        thread.join().unwrap();
     }
 
     #[bench]
     fn custom_writer_sending_a_message_to_debug_default(b: &mut Bencher) {
         let writer = Void {};
-        let (mut logger, thread) = Logger::<Log>::spawn_with_writer(writer);
+        let mut logger = Logger::<Log>::spawn_with_writer(writer);
         assert![!logger.debug(
             "tst",
             Log::Static(
@@ -795,25 +777,21 @@ mod tests {
         b.iter(|| {
             black_box(logger.debug("tst", black_box(Log::Static("Message"))));
         });
-        std::mem::drop(logger);
-        thread.join().unwrap();
     }
 
     #[bench]
     fn custom_writer_sending_a_message_to_info_default(b: &mut Bencher) {
         let writer = Void {};
-        let (mut logger, thread) = Logger::<Log>::spawn_with_writer(writer);
+        let mut logger = Logger::<Log>::spawn_with_writer(writer);
         b.iter(|| {
             black_box(logger.info("tst", black_box(Log::Static("Message"))));
         });
-        std::mem::drop(logger);
-        thread.join().unwrap();
     }
 
     #[bench]
     fn custom_writer_sending_a_complex_message_trace(b: &mut Bencher) {
         let writer = Void {};
-        let (mut logger, thread) = Logger::<Log>::spawn_with_writer(writer);
+        let mut logger = Logger::<Log>::spawn_with_writer(writer);
         assert![!logger.trace(
             "tst",
             Log::Static("Trace should be disabled during benchmark")
@@ -821,33 +799,27 @@ mod tests {
         b.iter(|| {
             black_box(logger.trace("tst", black_box(Log::Complex("Message", 3.14, &[1, 2, 3]))))
         });
-        std::mem::drop(logger);
-        thread.join().unwrap();
     }
 
     #[bench]
     fn custom_writer_sending_a_complex_message_info(b: &mut Bencher) {
         let writer = Void {};
-        let (mut logger, thread) = Logger::<Log>::spawn_with_writer(writer);
+        let mut logger = Logger::<Log>::spawn_with_writer(writer);
         b.iter(|| {
             black_box(logger.info("tst", black_box(Log::Complex("Message", 3.14, &[1, 2, 3]))));
         });
-        std::mem::drop(logger);
-        thread.join().unwrap();
     }
 
     #[bench]
     fn custom_writer_sending_a_complex_format_message_info(b: &mut Bencher) {
         let writer = Void {};
-        let (mut logger, thread) = Logger::<String>::spawn_with_writer(writer);
+        let mut logger = Logger::<String>::spawn_with_writer(writer);
         b.iter(|| {
             black_box(logger.info(
                 "tst",
                 black_box(format!["Message {} {:?}", 3.14, &[1, 2, 3]]),
             ));
         });
-        std::mem::drop(logger);
-        thread.join().unwrap();
     }
 
     // ---
