@@ -826,6 +826,48 @@ mod tests {
         });
     }
 
+    #[test]
+    fn void_logger_speed_info() {
+        // NOTE: This "benchmark" is implemented as a test because benches tend to
+        // overflow the channel
+        let writer = Void {};
+        let mut logger = Logger::<usize>::spawn_with_writer(writer);
+        let before = std::time::Instant::now();
+        for _ in 0..CHANNEL_SIZE {
+            logger.info("tst", black_box(12345usize));
+        }
+        let after = std::time::Instant::now();
+        println!["{:?}", (after - before) / (CHANNEL_SIZE as u32)];
+    }
+
+    #[test]
+    fn void_logger_speed_debug() {
+        // NOTE: This "benchmark" is implemented as a test because benches tend to
+        // overflow the channel
+        let writer = Void {};
+        let mut logger = Logger::<usize>::spawn_with_writer(writer);
+        let before = std::time::Instant::now();
+        for _ in 0..CHANNEL_SIZE {
+            logger.debug("tst", black_box(12345usize));
+        }
+        let after = std::time::Instant::now();
+        println!["{:?}", (after - before) / (CHANNEL_SIZE as u32)];
+    }
+
+    #[test]
+    fn void_logger_speed_trace() {
+        // NOTE: This "benchmark" is implemented as a test because benches tend to
+        // overflow the channel
+        let writer = Void {};
+        let mut logger = Logger::<usize>::spawn_with_writer(writer);
+        let before = std::time::Instant::now();
+        for _ in 0..CHANNEL_SIZE {
+            logger.trace("tst", black_box(12345usize));
+        }
+        let after = std::time::Instant::now();
+        println!["{:?}", (after - before) / (CHANNEL_SIZE as u32)];
+    }
+
     // ---
 
     use slog::{info, o, trace, Drain, Level, OwnedKVList, Record};
