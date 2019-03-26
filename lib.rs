@@ -649,6 +649,7 @@ mod tests {
             r"^(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec) \d{1,2} \d+ \d{2}:\d{2}:\d{2}.\d{9}(\+|-)\d{4}: 000 tst: Message\n",
         )
         .unwrap();
+        std::mem::drop(logger);
         assert![regex.is_match(&String::from_utf8(store.lock().unwrap().to_vec()).unwrap())];
     }
 
@@ -665,6 +666,7 @@ mod tests {
 (Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec) \d{1,2} \d+ \d{2}:\d{2}:\d{2}.\d{9}(\+|-)\d{4}: 000 tst \[2/2\]: \n",
         )
         .unwrap();
+        std::mem::drop(logger);
         assert![
             regex.is_match(&String::from_utf8(store.lock().unwrap().to_vec()).unwrap()),
             String::from_utf8(store.lock().unwrap().to_vec()).unwrap()
@@ -683,6 +685,7 @@ mod tests {
             r#"^(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec) \d{1,2} \d+ \d{2}:\d{2}:\d{2}.\d{9}(\+|-)\d{4}: 000 tst \[1/3\]: Message\n(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec) \d{1,2} \d+ \d{2}:\d{2}:\d{2}.\d{9}(\+|-)\d{4}: 000 tst \[2/3\]: Part\n(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec) \d{1,2} \d+ \d{2}:\d{2}:\d{2}.\d{9}(\+|-)\d{4}: 000 tst \[3/3\]: 2\n"#,
         )
         .unwrap();
+        std::mem::drop(logger);
         assert![
             regex.is_match(&String::from_utf8(store.lock().unwrap().to_vec()).unwrap()),
             String::from_utf8(store.lock().unwrap().to_vec()).unwrap()
@@ -701,6 +704,7 @@ mod tests {
             r#"^(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec) \d{1,2} \d+ \d{2}:\d{2}:\d{2}.\d{9}(\+|-)\d{4}: 000 tst \[1/4\]: Message\n(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec) \d{1,2} \d+ \d{2}:\d{2}:\d{2}.\d{9}(\+|-)\d{4}: 000 tst \[2/4\]: Part\n(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec) \d{1,2} \d+ \d{2}:\d{2}:\d{2}.\d{9}(\+|-)\d{4}: 000 tst \[3/4\]: 2\n(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec) \d{1,2} \d+ \d{2}:\d{2}:\d{2}.\d{9}(\+|-)\d{4}: 000 tst \[4/4\]: \n"#,
         )
         .unwrap();
+        std::mem::drop(logger);
         assert![
             regex.is_match(&String::from_utf8(store.lock().unwrap().to_vec()).unwrap()),
             String::from_utf8(store.lock().unwrap().to_vec()).unwrap()
@@ -837,7 +841,10 @@ mod tests {
     fn message_slog_disabled_by_compiler(b: &mut Bencher) {
         let decorator = slog_term::PlainDecorator::new(Void {});
         let drain = slog_term::CompactFormat::new(decorator).build().fuse();
-        let drain = slog_async::Async::new(drain).build().fuse();
+        let drain = slog_async::Async::new(drain)
+            .chan_size(CHANNEL_SIZE)
+            .build()
+            .fuse();
         let log = slog::Logger::root(drain, o![]);
         assert![!log.is_trace_enabled()];
         b.iter(|| {
@@ -850,7 +857,10 @@ mod tests {
         let decorator = slog_term::PlainDecorator::new(Void {});
         let drain = slog_term::CompactFormat::new(decorator).build().fuse();
         let drain = slog::LevelFilter::new(drain, Level::Critical).fuse();
-        let drain = slog_async::Async::new(drain).build().fuse();
+        let drain = slog_async::Async::new(drain)
+            .chan_size(CHANNEL_SIZE)
+            .build()
+            .fuse();
         let log = slog::Logger::root(drain, o![]);
         assert![log.is_info_enabled()];
         b.iter(|| {
@@ -862,7 +872,10 @@ mod tests {
     fn message_slog_disabled_dynamically_on_caller_side(b: &mut Bencher) {
         let decorator = slog_term::PlainDecorator::new(Void {});
         let drain = slog_term::CompactFormat::new(decorator).build().fuse();
-        let drain = slog_async::Async::new(drain).build().fuse();
+        let drain = slog_async::Async::new(drain)
+            .chan_size(CHANNEL_SIZE)
+            .build()
+            .fuse();
         let drain = slog::LevelFilter::new(drain, Level::Critical).fuse();
         let log = slog::Logger::root(drain, o![]);
         assert![!log.is_info_enabled()];
@@ -875,7 +888,10 @@ mod tests {
     fn message_slog_enabled(b: &mut Bencher) {
         let decorator = slog_term::PlainDecorator::new(Void {});
         let drain = slog_term::CompactFormat::new(decorator).build().fuse();
-        let drain = slog_async::Async::new(drain).build().fuse();
+        let drain = slog_async::Async::new(drain)
+            .chan_size(CHANNEL_SIZE)
+            .build()
+            .fuse();
         let log = slog::Logger::root(drain, o![]);
         b.iter(|| {
             black_box(info![log, "{}", black_box("Message")]);

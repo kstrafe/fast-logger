@@ -13,10 +13,6 @@ chrono = "0.4.6"
 
 [dev-dependencies]
 regex = "1.1.0"
+slog = "2.4.1"
 slog-async = "2.3"
-slog-json = "2.3"
-slog-scope = "4"
-slog-stream = "1.2"
 slog-term = "2.3"
-# slog = { version = "2.3", features = ["max_level_trace", "release_max_level_trace"] }
-slog = "2.3"
