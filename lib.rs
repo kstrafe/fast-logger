@@ -148,7 +148,7 @@ extern crate test;
 use chrono::prelude::*;
 use std::{
     collections::HashMap,
-    fmt::Display,
+    fmt::{self, Display},
     marker::Send,
     sync::{
         atomic::{AtomicUsize, Ordering},
@@ -188,6 +188,87 @@ impl Drop for AutoJoinHandle {
     fn drop(&mut self) {
         self.thread.take().map(JoinHandle::join);
     }
+}
+
+// ---
+
+struct Generic(Box<dyn Fn(&mut fmt::Formatter) -> fmt::Result + Send>);
+
+impl Display for Generic {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        (self.0)(f)
+    }
+}
+
+// ---
+
+#[macro_export]
+macro_rules! log {
+    ($n:expr, $log:expr, $ctx:expr, $($msg:expr),*; $($key:expr => $val:expr),*) => {
+        $log.log($n, $ctx, crate::Generic(Box::new(move |f| -> fmt::Result {
+            Ok({
+                write![f, $($msg),*]?;
+                $(
+                    write![f, ", {}={}", $key, $val]?;
+                )*
+            })
+        })));
+    };
+    ($n:expr, $log:expr, $ctx:expr, $($msg:expr),*) => {
+        $log.log($n, $ctx, Generic(Box::new(move |f| -> fmt::Result {
+            write![f, $($msg),*]
+        })));
+    };
+}
+
+#[macro_export]
+macro_rules! trace {
+    ($log:expr, $ctx:expr, $($msg:expr),*) => {
+        log![255, $log, $ctx, $($msg),*]
+    };
+    ($log:expr, $ctx:expr, $($msg:expr),*; $($key:expr => $val:expr),*) => {
+        log![255, $log, $ctx, $($msg),*; $($key => $val),*]
+    };
+}
+
+#[macro_export]
+macro_rules! debug {
+    ($log:expr, $ctx:expr, $($msg:expr),*; $($key:expr => $val:expr),*) => {
+        log![196, $log, $ctx, $($msg),*; $($key => $val),*]
+    };
+    ($log:expr, $ctx:expr, $($msg:expr),*) => {
+        log![196, $log, $ctx, $($msg),*]
+    };
+}
+
+#[macro_export]
+macro_rules! info {
+    ($log:expr, $ctx:expr, $($msg:expr),*) => {
+        crate::log![128, $log, $ctx, $($msg),*]
+    };
+    ($log:expr, $ctx:expr, $($msg:expr),*; $($key:expr => $val:expr),*) => {
+        crate::log![128, $log, $ctx, $($msg),*; $($key => $val),*]
+    };
+}
+
+#[macro_export]
+macro_rules! warn {
+    ($log:expr, $ctx:expr, $($msg:expr),*; $($key:expr => $val:expr),*) => {
+        log![64, $log, $ctx, $($msg),*; $($key => $val),*]
+    };
+    ($log:expr, $ctx:expr, $($msg:expr),*) => {
+        log![64, $log, $ctx, $($msg),*]
+    };
+}
+
+#[macro_export]
+macro_rules! error {
+    ($log:expr, $ctx:expr, $($msg:expr),*; $($key:expr => $val:expr),*) => {
+        log![0, $log, $ctx, $($msg),*; $($key => $val),*]
+    };
+    ($log:expr, $ctx:expr, $($msg:expr),*) => {
+        log![0, $log, $ctx, $($msg),*]
+    };
 }
 
 // ---
@@ -252,7 +333,13 @@ impl<C: 'static + Display + Send> LoggerV2Async<C> {
         let logger_thread = thread::Builder::new()
             .name("logger".to_string())
             .spawn(move || {
-                logger_thread(rx, full_count_clone, writer, context_specific_level_clone, level_clone)
+                logger_thread(
+                    rx,
+                    full_count_clone,
+                    writer,
+                    context_specific_level_clone,
+                    level_clone,
+                )
             })
             .unwrap();
         Logger {
@@ -701,11 +788,8 @@ mod tests {
         let writer = Store {
             store: store.clone(),
         };
-        let mut logger = Logger::<Log>::spawn_with_writer(writer);
-        let regex = Regex::new(
-            r"^$",
-        )
-        .unwrap();
+        let logger = Logger::<Log>::spawn_with_writer(writer);
+        let regex = Regex::new(r"^$").unwrap();
         std::mem::drop(logger);
         assert![regex.is_match(&String::from_utf8(store.lock().unwrap().to_vec()).unwrap())];
     }
@@ -719,10 +803,7 @@ mod tests {
         let mut logger = Logger::<Log>::spawn_with_writer(writer);
         logger.set_log_level(196);
         logger.set_context_specific_log_level("logger", 195);
-        let regex = Regex::new(
-            r"^$",
-        )
-        .unwrap();
+        let regex = Regex::new(r"^$").unwrap();
         std::mem::drop(logger);
         assert![regex.is_match(&String::from_utf8(store.lock().unwrap().to_vec()).unwrap())];
     }
@@ -783,6 +864,20 @@ mod tests {
             regex.is_match(&String::from_utf8(store.lock().unwrap().to_vec()).unwrap()),
             String::from_utf8(store.lock().unwrap().to_vec()).unwrap()
         ];
+    }
+
+    #[test]
+    fn generic() {
+        let mut logger = Logger::<Generic>::spawn();
+        log![123, logger, "tst", "lorem {}", "ipsum"; "dolor" => "sit", "amet" => 1234];
+        trace![logger, "tst", "lorem {}", "ipsum"; "a" => "b"];
+        debug![logger, "tst", "lorem {}", "ipsum"; "a" => "b"];
+        info![logger, "tst", "lorem {}", "ipsum"; "a" => "b"];
+        warn![logger, "tst", "lorem {}", "ipsum"; "a" => "b"];
+        error![logger, "tst", "lorem {}", "ipsum"; "a" => "b"];
+
+        let ipsum = 1;
+        info![logger, "tst", "lorem {}", ipsum; "dolor" => "sit"];
     }
 
     // ---
@@ -889,6 +984,15 @@ mod tests {
     }
 
     #[bench]
+    fn using_macros_to_send_message(b: &mut Bencher) {
+        let writer = Void {};
+        let mut logger = Logger::<Generic>::spawn_with_writer(writer);
+        b.iter(|| {
+            black_box(info!(logger, "tst", "Message {:?}", black_box(&[1, 2, 3]); black_box("pi") => black_box(3.14)));
+        });
+    }
+
+    #[bench]
     fn custom_writer_sending_a_complex_format_message_info(b: &mut Bencher) {
         let writer = Void {};
         let mut logger = Logger::<String>::spawn_with_writer(writer);
@@ -901,7 +1005,26 @@ mod tests {
     }
 
     #[test]
-    fn void_logger_speed_info() {
+    fn void_logger_speed_info_with_macros() {
+        // NOTE: This "benchmark" is implemented as a test because benches tend to
+        // overflow the channel
+        let writer = Void {};
+        let mut logger = Logger::<Generic>::spawn_with_writer(writer);
+        let before = std::time::Instant::now();
+        for _ in 0..CHANNEL_SIZE {
+            black_box(
+                info!(logger, black_box("tst"), "Message {:?}", black_box(&[1, 2, 3]); black_box("pi") => black_box(3.14)),
+            );
+        }
+        let after = std::time::Instant::now();
+        println![
+            "void logger speed info with macros: {:?}",
+            (after - before) / (CHANNEL_SIZE as u32)
+        ];
+    }
+
+    #[test]
+    fn void_logger_speed_info_without_macros() {
         // NOTE: This "benchmark" is implemented as a test because benches tend to
         // overflow the channel
         let writer = Void {};
@@ -911,7 +1034,10 @@ mod tests {
             logger.info("tst", black_box(12345usize));
         }
         let after = std::time::Instant::now();
-        println!["{:?}", (after - before) / (CHANNEL_SIZE as u32)];
+        println![
+            "void logger speed info: {:?}",
+            (after - before) / (CHANNEL_SIZE as u32)
+        ];
     }
 
     #[test]
@@ -925,7 +1051,10 @@ mod tests {
             logger.debug("tst", black_box(12345usize));
         }
         let after = std::time::Instant::now();
-        println!["{:?}", (after - before) / (CHANNEL_SIZE as u32)];
+        println![
+            "void logger speed debug: {:?}",
+            (after - before) / (CHANNEL_SIZE as u32)
+        ];
     }
 
     #[test]
@@ -939,12 +1068,15 @@ mod tests {
             logger.trace("tst", black_box(12345usize));
         }
         let after = std::time::Instant::now();
-        println!["{:?}", (after - before) / (CHANNEL_SIZE as u32)];
+        println![
+            "void logger speed trace: {:?}",
+            (after - before) / (CHANNEL_SIZE as u32)
+        ];
     }
 
     // ---
 
-    use slog::{info, o, trace, Drain, Level, OwnedKVList, Record};
+    use slog::{o, Drain, Level, OwnedKVList, Record};
     impl Drain for Void {
         type Ok = ();
         type Err = ();
@@ -964,7 +1096,7 @@ mod tests {
         let log = slog::Logger::root(drain, o![]);
         assert![!log.is_trace_enabled()];
         b.iter(|| {
-            black_box(trace![log, "{}", black_box("Message")]);
+            black_box(slog::trace![log, "{}", black_box("Message")]);
         });
     }
 
@@ -980,7 +1112,7 @@ mod tests {
         let log = slog::Logger::root(drain, o![]);
         assert![log.is_info_enabled()];
         b.iter(|| {
-            black_box(info![log, "{}", black_box("Message")]);
+            black_box(slog::info![log, "{}", black_box("Message")]);
         });
     }
 
@@ -996,7 +1128,7 @@ mod tests {
         let log = slog::Logger::root(drain, o![]);
         assert![!log.is_info_enabled()];
         b.iter(|| {
-            black_box(info![log, "{}", black_box("Message")]);
+            black_box(slog::info![log, "{}", black_box("Message")]);
         });
     }
 
@@ -1010,7 +1142,7 @@ mod tests {
             .fuse();
         let log = slog::Logger::root(drain, o![]);
         b.iter(|| {
-            black_box(info![log, "{}", black_box("Message")]);
+            black_box(slog::info![log, "{}", black_box("Message")]);
         });
     }
 }
