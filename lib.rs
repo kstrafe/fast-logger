@@ -210,6 +210,7 @@ impl<C: 'static + Display + Send> LoggerV2Async<C> {
         let full_count = Arc::new(AtomicUsize::new(0));
         let full_count_clone = full_count.clone();
         let level = Arc::new(AtomicUsize::new(DEFAULT_LEVEL as usize));
+        let level_clone = level.clone();
         let ex = std::io::stdout();
         let context_specific_level = Arc::new(Mutex::new(HashMap::new()));
         let context_specific_level_clone = context_specific_level.clone();
@@ -221,6 +222,7 @@ impl<C: 'static + Display + Send> LoggerV2Async<C> {
                     full_count_clone,
                     ex.lock(),
                     context_specific_level_clone,
+                    level_clone,
                 )
             })
             .unwrap();
@@ -244,12 +246,13 @@ impl<C: 'static + Display + Send> LoggerV2Async<C> {
         let full_count = Arc::new(AtomicUsize::new(0));
         let full_count_clone = full_count.clone();
         let level = Arc::new(AtomicUsize::new(DEFAULT_LEVEL as usize));
+        let level_clone = level.clone();
         let context_specific_level = Arc::new(Mutex::new(HashMap::new()));
         let context_specific_level_clone = context_specific_level.clone();
         let logger_thread = thread::Builder::new()
             .name("logger".to_string())
             .spawn(move || {
-                logger_thread(rx, full_count_clone, writer, context_specific_level_clone)
+                logger_thread(rx, full_count_clone, writer, context_specific_level_clone, level_clone)
             })
             .unwrap();
         Logger {
@@ -450,6 +453,7 @@ fn logger_thread<C: Display + Send, W: std::io::Write>(
     dropped: Arc<AtomicUsize>,
     mut writer: W,
     context_specific_level: Arc<Mutex<HashMap<&'static str, u8>>>,
+    global_level: Arc<AtomicUsize>,
 ) {
     'outer_loop: loop {
         match rx.recv() {
@@ -478,15 +482,37 @@ fn logger_thread<C: Display + Send, W: std::io::Write>(
                 }
             }
             Err(error @ RecvError { .. }) => {
-                let _ = do_write(
-                    &mut writer,
-                    0,
-                    "logger",
-                    format![
-                        "Unable to receive message. Exiting logger, reason={}",
-                        error
-                    ],
-                );
+                let lvls = context_specific_level.lock();
+                match lvls {
+                    Ok(lvls) => {
+                        if let Some(lvl) = lvls.get("logger") {
+                            if 196 <= *lvl && 196 <= global_level.load(Ordering::Relaxed) {
+                                let _ = do_write(
+                                    &mut writer,
+                                    196,
+                                    "logger",
+                                    format![
+                                        "Unable to receive message. Exiting logger, reason={}",
+                                        error
+                                    ],
+                                );
+                            }
+                        } else if 196 <= global_level.load(Ordering::Relaxed) {
+                            let _ = do_write(
+                                &mut writer,
+                                196,
+                                "logger",
+                                format![
+                                    "Unable to receive message. Exiting logger, reason={}",
+                                    error
+                                ],
+                            );
+                        }
+                    }
+                    Err(_poison) => {
+                        // Do nothing
+                    }
+                }
                 break 'outer_loop;
             }
         }
@@ -647,6 +673,54 @@ mod tests {
         assert_eq![true, logger.error("tst", Log::Static("Second message"))];
         let regex = Regex::new(
             r"^(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec) \d{1,2} \d+ \d{2}:\d{2}:\d{2}.\d{9}(\+|-)\d{4}: 000 tst: Message\n",
+        )
+        .unwrap();
+        std::mem::drop(logger);
+        assert![regex.is_match(&String::from_utf8(store.lock().unwrap().to_vec()).unwrap())];
+    }
+
+    #[test]
+    fn ensure_ending_message_when_exit_1() {
+        let store = Arc::new(Mutex::new(vec![]));
+        let writer = Store {
+            store: store.clone(),
+        };
+        let mut logger = Logger::<Log>::spawn_with_writer(writer);
+        logger.set_log_level(196);
+        let regex = Regex::new(
+            r"^(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec) \d{1,2} \d+ \d{2}:\d{2}:\d{2}.\d{9}(\+|-)\d{4}: 196 logger: Unable to receive message. Exiting logger, reason=receiving on a closed channel\n$",
+        )
+        .unwrap();
+        std::mem::drop(logger);
+        assert![regex.is_match(&String::from_utf8(store.lock().unwrap().to_vec()).unwrap())];
+    }
+
+    #[test]
+    fn ensure_ending_message_when_exit_2() {
+        let store = Arc::new(Mutex::new(vec![]));
+        let writer = Store {
+            store: store.clone(),
+        };
+        let mut logger = Logger::<Log>::spawn_with_writer(writer);
+        let regex = Regex::new(
+            r"^$",
+        )
+        .unwrap();
+        std::mem::drop(logger);
+        assert![regex.is_match(&String::from_utf8(store.lock().unwrap().to_vec()).unwrap())];
+    }
+
+    #[test]
+    fn ensure_ending_message_when_exit_3() {
+        let store = Arc::new(Mutex::new(vec![]));
+        let writer = Store {
+            store: store.clone(),
+        };
+        let mut logger = Logger::<Log>::spawn_with_writer(writer);
+        logger.set_log_level(196);
+        logger.set_context_specific_log_level("logger", 195);
+        let regex = Regex::new(
+            r"^$",
         )
         .unwrap();
         std::mem::drop(logger);
