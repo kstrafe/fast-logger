@@ -146,13 +146,13 @@
 extern crate test;
 
 use chrono::prelude::*;
+use crossbeam_channel::{bounded, RecvError, TrySendError, Sender, Receiver};
 use std::{
     collections::HashMap,
     fmt::{self, Display},
     marker::Send,
     sync::{
         atomic::{AtomicUsize, Ordering},
-        mpsc::{self, RecvError, TrySendError},
         Arc, Mutex,
     },
     thread::{self, JoinHandle},
@@ -170,7 +170,7 @@ pub type Logger<C> = LoggerV2Async<C>;
 #[derive(Clone)]
 pub struct LoggerV2Async<C: Display + Send> {
     // Explicitly first so it's the first to drop
-    log_channel: mpsc::SyncSender<(u8, &'static str, C)>,
+    log_channel: Sender<(u8, &'static str, C)>,
     context_specific_level: Arc<Mutex<HashMap<&'static str, u8>>>,
     level: Arc<AtomicUsize>,
     log_channel_full_count: Arc<AtomicUsize>,
@@ -192,7 +192,8 @@ impl Drop for AutoJoinHandle {
 
 // ---
 
-struct Generic(Box<dyn Fn(&mut fmt::Formatter) -> fmt::Result + Send>);
+#[derive(Clone)]
+pub struct Generic(Arc<dyn Fn(&mut fmt::Formatter) -> fmt::Result + Send + Sync>);
 
 impl Display for Generic {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
@@ -202,10 +203,18 @@ impl Display for Generic {
 
 // ---
 
+/// This is an implementation detail used by macros, and should NOT be called directly!
+#[doc(hidden)]
+pub fn make_generic__(arg: Arc<dyn Fn(&mut fmt::Formatter) -> fmt::Result + Send + Sync>) -> Generic {
+    Generic(arg)
+}
+
+// ---
+
 #[macro_export]
 macro_rules! log {
     ($n:expr, $log:expr, $ctx:expr, $($msg:expr),*; $($key:expr => $val:expr),*) => {
-        $log.log($n, $ctx, crate::Generic(Box::new(move |f| -> fmt::Result {
+        $log.log($n, $ctx, $crate::make_generic__(Arc::new(move |f| -> ::std::fmt::Result {
             Ok({
                 write![f, $($msg),*]?;
                 $(
@@ -215,7 +224,7 @@ macro_rules! log {
         })));
     };
     ($n:expr, $log:expr, $ctx:expr, $($msg:expr),*) => {
-        $log.log($n, $ctx, Generic(Box::new(move |f| -> fmt::Result {
+        $log.log($n, $ctx, $crate::make_generic__(Arc::new(move |f| -> ::std::fmt::Result {
             write![f, $($msg),*]
         })));
     };
@@ -224,50 +233,50 @@ macro_rules! log {
 #[macro_export]
 macro_rules! trace {
     ($log:expr, $ctx:expr, $($msg:expr),*) => {
-        log![255, $log, $ctx, $($msg),*]
+        $crate::log![255, $log, $ctx, $($msg),*]
     };
     ($log:expr, $ctx:expr, $($msg:expr),*; $($key:expr => $val:expr),*) => {
-        log![255, $log, $ctx, $($msg),*; $($key => $val),*]
+        $crate::log![255, $log, $ctx, $($msg),*; $($key => $val),*]
     };
 }
 
 #[macro_export]
 macro_rules! debug {
     ($log:expr, $ctx:expr, $($msg:expr),*; $($key:expr => $val:expr),*) => {
-        log![196, $log, $ctx, $($msg),*; $($key => $val),*]
+        $crate::log![196, $log, $ctx, $($msg),*; $($key => $val),*]
     };
     ($log:expr, $ctx:expr, $($msg:expr),*) => {
-        log![196, $log, $ctx, $($msg),*]
+        $crate::log![196, $log, $ctx, $($msg),*]
     };
 }
 
-#[macro_export]
+#[macro_export(local_inner_macros)]
 macro_rules! info {
     ($log:expr, $ctx:expr, $($msg:expr),*) => {
-        crate::log![128, $log, $ctx, $($msg),*]
+        $crate::log![128, $log, $ctx, $($msg),*]
     };
     ($log:expr, $ctx:expr, $($msg:expr),*; $($key:expr => $val:expr),*) => {
-        crate::log![128, $log, $ctx, $($msg),*; $($key => $val),*]
+        $crate::log![128, $log, $ctx, $($msg),*; $($key => $val),*]
     };
 }
 
 #[macro_export]
 macro_rules! warn {
     ($log:expr, $ctx:expr, $($msg:expr),*; $($key:expr => $val:expr),*) => {
-        log![64, $log, $ctx, $($msg),*; $($key => $val),*]
+        $crate::log![64, $log, $ctx, $($msg),*; $($key => $val),*]
     };
     ($log:expr, $ctx:expr, $($msg:expr),*) => {
-        log![64, $log, $ctx, $($msg),*]
+        $crate::log![64, $log, $ctx, $($msg),*]
     };
 }
 
 #[macro_export]
 macro_rules! error {
     ($log:expr, $ctx:expr, $($msg:expr),*; $($key:expr => $val:expr),*) => {
-        log![0, $log, $ctx, $($msg),*; $($key => $val),*]
+        $crate::log![0, $log, $ctx, $($msg),*; $($key => $val),*]
     };
     ($log:expr, $ctx:expr, $($msg:expr),*) => {
-        log![0, $log, $ctx, $($msg),*]
+        $crate::log![0, $log, $ctx, $($msg),*]
     };
 }
 
@@ -287,7 +296,7 @@ impl<C: 'static + Display + Send> LoggerV2Async<C> {
     /// Typically, you only call `spawn` once in an application
     /// since you just want a single logging thread to print stuff.
     pub fn spawn() -> Logger<C> {
-        let (tx, rx) = mpsc::sync_channel(CHANNEL_SIZE);
+        let (tx, rx) = bounded(CHANNEL_SIZE);
         let full_count = Arc::new(AtomicUsize::new(0));
         let full_count_clone = full_count.clone();
         let level = Arc::new(AtomicUsize::new(DEFAULT_LEVEL as usize));
@@ -323,7 +332,7 @@ impl<C: 'static + Display + Send> LoggerV2Async<C> {
     /// See `spawn` for more information regarding spawning. This function providing the logger a
     /// writer, which makes the logger use any arbitrary writing interface.
     pub fn spawn_with_writer<T: 'static + std::io::Write + Send>(writer: T) -> Logger<C> {
-        let (tx, rx) = mpsc::sync_channel(CHANNEL_SIZE);
+        let (tx, rx) = bounded(CHANNEL_SIZE);
         let full_count = Arc::new(AtomicUsize::new(0));
         let full_count_clone = full_count.clone();
         let level = Arc::new(AtomicUsize::new(DEFAULT_LEVEL as usize));
@@ -536,7 +545,7 @@ fn do_write<C: Display + Send, W: std::io::Write>(
 }
 
 fn logger_thread<C: Display + Send, W: std::io::Write>(
-    rx: mpsc::Receiver<(u8, &'static str, C)>,
+    rx: Receiver<(u8, &'static str, C)>,
     dropped: Arc<AtomicUsize>,
     mut writer: W,
     context_specific_level: Arc<Mutex<HashMap<&'static str, u8>>>,
@@ -775,7 +784,7 @@ mod tests {
         let mut logger = Logger::<Log>::spawn_with_writer(writer);
         logger.set_log_level(196);
         let regex = Regex::new(
-            r"^(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec) \d{1,2} \d+ \d{2}:\d{2}:\d{2}.\d{9}(\+|-)\d{4}: 196 logger: Unable to receive message. Exiting logger, reason=receiving on a closed channel\n$",
+            r"^(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec) \d{1,2} \d+ \d{2}:\d{2}:\d{2}.\d{9}(\+|-)\d{4}: 196 logger: Unable to receive message. Exiting logger, reason=receiving on an empty and disconnected channel\n$",
         )
         .unwrap();
         std::mem::drop(logger);
@@ -878,6 +887,18 @@ mod tests {
 
         let ipsum = 1;
         info![logger, "tst", "lorem {}", ipsum; "dolor" => "sit"];
+    }
+
+    #[test]
+    fn custom_writer_with_generic() {
+        impl From<Generic> for Log {
+            fn from(_: Generic) -> Self {
+                Log::Static("Unable to convert")
+            }
+        }
+        let mut logger = Logger::<Log>::spawn();
+        assert_eq![true, logger.error("tst", Log::Static("Message"))];
+        assert_eq![true, error![logger, "tst", "Message"]];
     }
 
     // ---
