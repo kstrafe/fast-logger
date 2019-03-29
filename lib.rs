@@ -28,9 +28,58 @@
 //! Note: an `error` message priority 0, and log levels are always unsigned, so an `error` message
 //! can never be filtered.
 //!
-//! # Example #
+//! # Example - Generic #
 //!
-//! Here is an example:
+//! Note that generic logging requires indirection at runtime, and may slow down your program.
+//! Still, generic logging is very desirable because it is easy to use. There are two ways to do
+//! generic logging depending on your needs:
+//!
+//! ```
+//! use logger::{info, Generic, Logger};
+//!
+//! fn main() {
+//!     let mut logger = Logger::<Generic>::spawn();
+//!     info![logger, "context", "Message {}", "More"; "key" => "value", "three" => 3];
+//! }
+//! ```
+//! The other macros are [trace!], [debug!], [warn!], [error!], and the generic [log!].
+//!
+//! If you wish to mix this with static logging, you can do the following:
+//! ```
+//! use logger::{info, Generic, Logger};
+//!
+//! enum MyMsg {
+//!     Static(&'static str),
+//!     Dynamic(Generic),
+//! }
+//!
+//! impl std::fmt::Display for MyMsg {
+//!     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+//!         match self {
+//!             MyMsg::Static(string) => write![f, "{}", string],
+//!             MyMsg::Dynamic(handle) => handle.fmt(f),
+//!         }
+//!     }
+//! }
+//!
+//! impl From<Generic> for MyMsg {
+//!     fn from(f: Generic) -> Self {
+//!         MyMsg::Dynamic(f)
+//!     }
+//! }
+//!
+//! fn main() {
+//!     // Setup
+//!     let mut logger = Logger::<MyMsg>::spawn();
+//!     info![logger, "context", "Message {}", "More"; "key" => "value", "three" => 3];
+//! }
+//! ```
+//!
+//! # Example of static logging #
+//!
+//! Here is an example of static-logging only, the macros do not work for this, as these generate
+//! a [Generic]. Anything implementing [Into] for the type of the logger will be accepted into
+//! the logging functions.
 //!
 //! ```
 //! use logger::Logger;
@@ -64,11 +113,6 @@
 //!     logger.error("ctx", MyMessageEnum::SimpleMessage("Hello world!"));
 //! }
 //! ```
-//! # Why the logging functions are not generic #
-//! Why aren't the logging functions generic over `Display`?
-//! Because that would require a reference to be sent to a `&'static Display`, which is hard to do
-//! when this `Display` is built from a string read from a socket. This is because we need to - at
-//! compile time - give the channel a type so that it can see the size of the type.
 //!
 //! # Example with log levels #
 //!
@@ -146,7 +190,7 @@
 extern crate test;
 
 use chrono::prelude::*;
-use crossbeam_channel::{bounded, RecvError, TrySendError, Sender, Receiver};
+use crossbeam_channel::{bounded, Receiver, RecvError, Sender, TrySendError};
 use std::{
     collections::HashMap,
     fmt::{self, Display},
@@ -158,6 +202,7 @@ use std::{
     thread::{self, JoinHandle},
 };
 
+/// The logger which dependent crates should use
 pub type Logger<C> = LoggerV2Async<C>;
 
 /// The fastest logger in the west
@@ -192,6 +237,7 @@ impl Drop for AutoJoinHandle {
 
 // ---
 
+/// A handle for generic logging data, used by macros
 #[derive(Clone)]
 pub struct Generic(Arc<dyn Fn(&mut fmt::Formatter) -> fmt::Result + Send + Sync>);
 
@@ -205,16 +251,20 @@ impl Display for Generic {
 
 /// This is an implementation detail used by macros, and should NOT be called directly!
 #[doc(hidden)]
-pub fn make_generic__(arg: Arc<dyn Fn(&mut fmt::Formatter) -> fmt::Result + Send + Sync>) -> Generic {
+pub fn make_generic__(
+    arg: Arc<dyn Fn(&mut fmt::Formatter) -> fmt::Result + Send + Sync>,
+) -> Generic {
     Generic(arg)
 }
 
 // ---
 
+/// Equivalent to logging to the [log] function with an appropriate level, context, and a
+/// [Generic].
 #[macro_export]
 macro_rules! log {
     ($n:expr, $log:expr, $ctx:expr, $($msg:expr),*; $($key:expr => $val:expr),*) => {
-        $log.log($n, $ctx, $crate::make_generic__(Arc::new(move |f| -> ::std::fmt::Result {
+        $log.log($n, $ctx, $crate::make_generic__(::std::sync::Arc::new(move |f| -> ::std::fmt::Result {
             Ok({
                 write![f, $($msg),*]?;
                 $(
@@ -224,12 +274,13 @@ macro_rules! log {
         })));
     };
     ($n:expr, $log:expr, $ctx:expr, $($msg:expr),*) => {
-        $log.log($n, $ctx, $crate::make_generic__(Arc::new(move |f| -> ::std::fmt::Result {
+        $log.log($n, $ctx, $crate::make_generic__(::std::sync::Arc::new(move |f| -> ::std::fmt::Result {
             write![f, $($msg),*]
         })));
     };
 }
 
+/// Equivalent to [log!] with a level of 255
 #[macro_export]
 macro_rules! trace {
     ($log:expr, $ctx:expr, $($msg:expr),*) => {
@@ -240,6 +291,7 @@ macro_rules! trace {
     };
 }
 
+/// Equivalent to [log!] with a level of 196
 #[macro_export]
 macro_rules! debug {
     ($log:expr, $ctx:expr, $($msg:expr),*; $($key:expr => $val:expr),*) => {
@@ -250,7 +302,8 @@ macro_rules! debug {
     };
 }
 
-#[macro_export(local_inner_macros)]
+/// Equivalent to [log!] with a level of 128
+#[macro_export]
 macro_rules! info {
     ($log:expr, $ctx:expr, $($msg:expr),*) => {
         $crate::log![128, $log, $ctx, $($msg),*]
@@ -260,6 +313,7 @@ macro_rules! info {
     };
 }
 
+/// Equivalent to [log!] with a level of 64
 #[macro_export]
 macro_rules! warn {
     ($log:expr, $ctx:expr, $($msg:expr),*; $($key:expr => $val:expr),*) => {
@@ -270,6 +324,7 @@ macro_rules! warn {
     };
 }
 
+/// Equivalent to [log!] with a level of 0
 #[macro_export]
 macro_rules! error {
     ($log:expr, $ctx:expr, $($msg:expr),*; $($key:expr => $val:expr),*) => {
