@@ -263,76 +263,106 @@ pub fn make_generic__(
 /// [Generic].
 #[macro_export]
 macro_rules! log {
-    ($n:expr, $log:expr, $ctx:expr, $($msg:expr),*; $($key:expr => $val:expr),*) => {
+    ($n:expr, $log:expr, $ctx:expr, $fmt:expr, $($msg:expr),*; $($key:expr => $val:expr),*) => {{
         $log.log($n, $ctx, $crate::make_generic__(::std::sync::Arc::new(move |f| -> ::std::fmt::Result {
             Ok({
-                write![f, $($msg),*]?;
+                write![f, $fmt, $($msg),*]?;
                 $(
                     write![f, ", {}={}", $key, $val]?;
                 )*
             })
-        })));
-    };
-    ($n:expr, $log:expr, $ctx:expr, $($msg:expr),*) => {
+        })))
+    }};
+    ($n:expr, $log:expr, $ctx:expr, $fmt:expr; $($key:expr => $val:expr),*) => {{
         $log.log($n, $ctx, $crate::make_generic__(::std::sync::Arc::new(move |f| -> ::std::fmt::Result {
-            write![f, $($msg),*]
-        })));
-    };
+            Ok({
+                write![f, $fmt]?;
+                $(
+                    write![f, ", {}={}", $key, $val]?;
+                )*
+            })
+        })))
+    }};
+    ($n:expr, $log:expr, $ctx:expr, $fmt:expr, $($msg:expr),*) => {{
+        $log.log($n, $ctx, $crate::make_generic__(::std::sync::Arc::new(move |f| -> ::std::fmt::Result {
+            write![f, $fmt, $($msg),*]
+        })))
+    }};
+    ($n:expr, $log:expr, $ctx:expr, $fmt:expr) => {{
+        $log.log($n, $ctx, $crate::make_generic__(::std::sync::Arc::new(move |f| -> ::std::fmt::Result {
+            write![f, $fmt]
+        })))
+    }};
 }
 
 /// Equivalent to [log!] with a level of 255
 #[macro_export]
 macro_rules! trace {
-    ($log:expr, $ctx:expr, $($msg:expr),*) => {
-        $crate::log![255, $log, $ctx, $($msg),*]
-    };
-    ($log:expr, $ctx:expr, $($msg:expr),*; $($key:expr => $val:expr),*) => {
-        $crate::log![255, $log, $ctx, $($msg),*; $($key => $val),*]
-    };
+    ($log:expr, $ctx:expr, $fmt:expr, $($msg:expr),*; $($key:expr => $val:expr),*) => { $crate::log![255, $log, $ctx, $fmt, $($msg),*; $($key => $val),*] };
+    ($log:expr, $ctx:expr, $fmt:expr, $($msg:expr),*,; $($key:expr => $val:expr),*) => { $crate::log![255, $log, $ctx, $fmt, $($msg),*; $($key => $val),*] };
+    ($log:expr, $ctx:expr, $fmt:expr, $($msg:expr),*,; $($key:expr => $val:expr),*,) => { $crate::log![255, $log, $ctx, $fmt, $($msg),*; $($key => $val),*] };
+    ($log:expr, $ctx:expr, $fmt:expr, $($msg:expr),*; $($key:expr => $val:expr),*,) => { $crate::log![255, $log, $ctx, $fmt, $($msg),*; $($key => $val),*] };
+    ($log:expr, $ctx:expr, $fmt:expr; $($key:expr => $val:expr),*) => { $crate::log![255, $log, $ctx, $fmt] };
+    ($log:expr, $ctx:expr, $fmt:expr; $($key:expr => $val:expr),*,) => { $crate::log![255, $log, $ctx, $fmt] };
+    ($log:expr, $ctx:expr, $fmt:expr, $($msg:expr),*) => { $crate::log![255, $log, $ctx, $fmt, $($msg),*] };
+    ($log:expr, $ctx:expr, $fmt:expr, $($msg:expr),*,) => { $crate::log![255, $log, $ctx, $fmt, $($msg),*] };
+    ($log:expr, $ctx:expr, $fmt:expr) => { $crate::log![255, $log, $ctx, $fmt] };
 }
 
 /// Equivalent to [log!] with a level of 196
 #[macro_export]
 macro_rules! debug {
-    ($log:expr, $ctx:expr, $($msg:expr),*; $($key:expr => $val:expr),*) => {
-        $crate::log![196, $log, $ctx, $($msg),*; $($key => $val),*]
-    };
-    ($log:expr, $ctx:expr, $($msg:expr),*) => {
-        $crate::log![196, $log, $ctx, $($msg),*]
-    };
+    ($log:expr, $ctx:expr, $fmt:expr, $($msg:expr),*; $($key:expr => $val:expr),*) => { $crate::log![192, $log, $ctx, $fmt, $($msg),*; $($key => $val),*] };
+    ($log:expr, $ctx:expr, $fmt:expr, $($msg:expr),*,; $($key:expr => $val:expr),*) => { $crate::log![192, $log, $ctx, $fmt, $($msg),*; $($key => $val),*] };
+    ($log:expr, $ctx:expr, $fmt:expr, $($msg:expr),*,; $($key:expr => $val:expr),*,) => { $crate::log![192, $log, $ctx, $fmt, $($msg),*; $($key => $val),*] };
+    ($log:expr, $ctx:expr, $fmt:expr, $($msg:expr),*; $($key:expr => $val:expr),*,) => { $crate::log![192, $log, $ctx, $fmt, $($msg),*; $($key => $val),*] };
+    ($log:expr, $ctx:expr, $fmt:expr; $($key:expr => $val:expr),*) => { $crate::log![192, $log, $ctx, $fmt] };
+    ($log:expr, $ctx:expr, $fmt:expr; $($key:expr => $val:expr),*,) => { $crate::log![192, $log, $ctx, $fmt] };
+    ($log:expr, $ctx:expr, $fmt:expr, $($msg:expr),*) => { $crate::log![192, $log, $ctx, $fmt, $($msg),*] };
+    ($log:expr, $ctx:expr, $fmt:expr, $($msg:expr),*,) => { $crate::log![192, $log, $ctx, $fmt, $($msg),*] };
+    ($log:expr, $ctx:expr, $fmt:expr) => { $crate::log![192, $log, $ctx, $fmt] };
 }
 
 /// Equivalent to [log!] with a level of 128
 #[macro_export]
 macro_rules! info {
-    ($log:expr, $ctx:expr, $($msg:expr),*) => {
-        $crate::log![128, $log, $ctx, $($msg),*]
-    };
-    ($log:expr, $ctx:expr, $($msg:expr),*; $($key:expr => $val:expr),*) => {
-        $crate::log![128, $log, $ctx, $($msg),*; $($key => $val),*]
-    };
+    ($log:expr, $ctx:expr, $fmt:expr, $($msg:expr),*; $($key:expr => $val:expr),*) => { $crate::log![128, $log, $ctx, $fmt, $($msg),*; $($key => $val),*] };
+    ($log:expr, $ctx:expr, $fmt:expr, $($msg:expr),*,; $($key:expr => $val:expr),*) => { $crate::log![128, $log, $ctx, $fmt, $($msg),*; $($key => $val),*] };
+    ($log:expr, $ctx:expr, $fmt:expr, $($msg:expr),*,; $($key:expr => $val:expr),*,) => { $crate::log![128, $log, $ctx, $fmt, $($msg),*; $($key => $val),*] };
+    ($log:expr, $ctx:expr, $fmt:expr, $($msg:expr),*; $($key:expr => $val:expr),*,) => { $crate::log![128, $log, $ctx, $fmt, $($msg),*; $($key => $val),*] };
+    ($log:expr, $ctx:expr, $fmt:expr; $($key:expr => $val:expr),*) => { $crate::log![128, $log, $ctx, $fmt] };
+    ($log:expr, $ctx:expr, $fmt:expr; $($key:expr => $val:expr),*,) => { $crate::log![128, $log, $ctx, $fmt] };
+    ($log:expr, $ctx:expr, $fmt:expr, $($msg:expr),*) => { $crate::log![128, $log, $ctx, $fmt, $($msg),*] };
+    ($log:expr, $ctx:expr, $fmt:expr, $($msg:expr),*,) => { $crate::log![128, $log, $ctx, $fmt, $($msg),*] };
+    ($log:expr, $ctx:expr, $fmt:expr) => { $crate::log![128, $log, $ctx, $fmt] };
 }
 
 /// Equivalent to [log!] with a level of 64
 #[macro_export]
 macro_rules! warn {
-    ($log:expr, $ctx:expr, $($msg:expr),*; $($key:expr => $val:expr),*) => {
-        $crate::log![64, $log, $ctx, $($msg),*; $($key => $val),*]
-    };
-    ($log:expr, $ctx:expr, $($msg:expr),*) => {
-        $crate::log![64, $log, $ctx, $($msg),*]
-    };
+    ($log:expr, $ctx:expr, $fmt:expr, $($msg:expr),*; $($key:expr => $val:expr),*) => { $crate::log![64, $log, $ctx, $fmt, $($msg),*; $($key => $val),*] };
+    ($log:expr, $ctx:expr, $fmt:expr, $($msg:expr),*,; $($key:expr => $val:expr),*) => { $crate::log![64, $log, $ctx, $fmt, $($msg),*; $($key => $val),*] };
+    ($log:expr, $ctx:expr, $fmt:expr, $($msg:expr),*,; $($key:expr => $val:expr),*,) => { $crate::log![64, $log, $ctx, $fmt, $($msg),*; $($key => $val),*] };
+    ($log:expr, $ctx:expr, $fmt:expr, $($msg:expr),*; $($key:expr => $val:expr),*,) => { $crate::log![64, $log, $ctx, $fmt, $($msg),*; $($key => $val),*] };
+    ($log:expr, $ctx:expr, $fmt:expr; $($key:expr => $val:expr),*) => { $crate::log![64, $log, $ctx, $fmt] };
+    ($log:expr, $ctx:expr, $fmt:expr; $($key:expr => $val:expr),*,) => { $crate::log![64, $log, $ctx, $fmt] };
+    ($log:expr, $ctx:expr, $fmt:expr, $($msg:expr),*) => { $crate::log![64, $log, $ctx, $fmt, $($msg),*] };
+    ($log:expr, $ctx:expr, $fmt:expr, $($msg:expr),*,) => { $crate::log![64, $log, $ctx, $fmt, $($msg),*] };
+    ($log:expr, $ctx:expr, $fmt:expr) => { $crate::log![64, $log, $ctx, $fmt] };
 }
 
 /// Equivalent to [log!] with a level of 0
 #[macro_export]
 macro_rules! error {
-    ($log:expr, $ctx:expr, $($msg:expr),*; $($key:expr => $val:expr),*) => {
-        $crate::log![0, $log, $ctx, $($msg),*; $($key => $val),*]
-    };
-    ($log:expr, $ctx:expr, $($msg:expr),*) => {
-        $crate::log![0, $log, $ctx, $($msg),*]
-    };
+    ($log:expr, $ctx:expr, $fmt:expr, $($msg:expr),*; $($key:expr => $val:expr),*) => { $crate::log![0, $log, $ctx, $fmt, $($msg),*; $($key => $val),*] };
+    ($log:expr, $ctx:expr, $fmt:expr, $($msg:expr),*,; $($key:expr => $val:expr),*) => { $crate::log![0, $log, $ctx, $fmt, $($msg),*; $($key => $val),*] };
+    ($log:expr, $ctx:expr, $fmt:expr, $($msg:expr),*,; $($key:expr => $val:expr),*,) => { $crate::log![0, $log, $ctx, $fmt, $($msg),*; $($key => $val),*] };
+    ($log:expr, $ctx:expr, $fmt:expr, $($msg:expr),*; $($key:expr => $val:expr),*,) => { $crate::log![0, $log, $ctx, $fmt, $($msg),*; $($key => $val),*] };
+    ($log:expr, $ctx:expr, $fmt:expr; $($key:expr => $val:expr),*) => { $crate::log![0, $log, $ctx, $fmt] };
+    ($log:expr, $ctx:expr, $fmt:expr; $($key:expr => $val:expr),*,) => { $crate::log![0, $log, $ctx, $fmt] };
+    ($log:expr, $ctx:expr, $fmt:expr, $($msg:expr),*) => { $crate::log![0, $log, $ctx, $fmt, $($msg),*] };
+    ($log:expr, $ctx:expr, $fmt:expr, $($msg:expr),*,) => { $crate::log![0, $log, $ctx, $fmt, $($msg),*] };
+    ($log:expr, $ctx:expr, $fmt:expr) => { $crate::log![0, $log, $ctx, $fmt] };
 }
 
 // ---
@@ -954,6 +984,96 @@ mod tests {
         let mut logger = Logger::<Log>::spawn();
         assert_eq![true, logger.error("tst", Log::Static("Message"))];
         assert_eq![true, error![logger, "tst", "Message"]];
+    }
+
+    #[test]
+    fn ensure_all_macro_variants_can_be_used() {
+        let mut logger = Logger::<Log>::spawn();
+
+        assert_eq![false, trace![logger, "tst", "Message"]];
+        assert_eq![false, trace![logger, "tst", "Message",]];
+        assert_eq![false, trace![logger, "tst", "Message {}", "argument"]];
+        assert_eq![false, trace![logger, "tst", "Message {}", "argument",]];
+        assert_eq![false, trace![logger, "tst", "Message";]];
+        assert_eq![false, trace![logger, "tst", "Message"; "a" => "b"]];
+        assert_eq![false, trace![logger, "tst", "Message"; "a" => "b",]];
+        assert_eq![false, trace![logger, "tst", "Message",;]];
+        assert_eq![false, trace![logger, "tst", "Message",; "a" => "b"]];
+        assert_eq![false, trace![logger, "tst", "Message",; "a" => "b",]];
+        assert_eq![false, trace![logger, "tst", "Message {}", "argument";]];
+        assert_eq![false, trace![logger, "tst", "Message {}", "argument"; "a" => "b"]];
+        assert_eq![false, trace![logger, "tst", "Message {}", "argument"; "a" => "b",]];
+        assert_eq![false, trace![logger, "tst", "Message {}", "argument",;]];
+        assert_eq![false, trace![logger, "tst", "Message {}", "argument",; "a" => "b"]];
+        assert_eq![false, trace![logger, "tst", "Message {}", "argument",; "a" => "b",]];
+
+        assert_eq![false, debug![logger, "tst", "Message"]];
+        assert_eq![false, debug![logger, "tst", "Message",]];
+        assert_eq![false, debug![logger, "tst", "Message {}", "argument"]];
+        assert_eq![false, debug![logger, "tst", "Message {}", "argument",]];
+        assert_eq![false, debug![logger, "tst", "Message";]];
+        assert_eq![false, debug![logger, "tst", "Message"; "a" => "b"]];
+        assert_eq![false, debug![logger, "tst", "Message"; "a" => "b",]];
+        assert_eq![false, debug![logger, "tst", "Message",;]];
+        assert_eq![false, debug![logger, "tst", "Message",; "a" => "b"]];
+        assert_eq![false, debug![logger, "tst", "Message",; "a" => "b",]];
+        assert_eq![false, debug![logger, "tst", "Message {}", "argument";]];
+        assert_eq![false, debug![logger, "tst", "Message {}", "argument"; "a" => "b"]];
+        assert_eq![false, debug![logger, "tst", "Message {}", "argument"; "a" => "b",]];
+        assert_eq![false, debug![logger, "tst", "Message {}", "argument",;]];
+        assert_eq![false, debug![logger, "tst", "Message {}", "argument",; "a" => "b"]];
+        assert_eq![false, debug![logger, "tst", "Message {}", "argument",; "a" => "b",]];
+
+        assert_eq![true, info![logger, "tst", "Message"]];
+        assert_eq![true, info![logger, "tst", "Message",]];
+        assert_eq![true, info![logger, "tst", "Message {}", "argument"]];
+        assert_eq![true, info![logger, "tst", "Message {}", "argument",]];
+        assert_eq![true, info![logger, "tst", "Message";]];
+        assert_eq![true, info![logger, "tst", "Message"; "a" => "b"]];
+        assert_eq![true, info![logger, "tst", "Message"; "a" => "b",]];
+        assert_eq![true, info![logger, "tst", "Message",;]];
+        assert_eq![true, info![logger, "tst", "Message",; "a" => "b"]];
+        assert_eq![true, info![logger, "tst", "Message",; "a" => "b",]];
+        assert_eq![true, info![logger, "tst", "Message {}", "argument";]];
+        assert_eq![true, info![logger, "tst", "Message {}", "argument"; "a" => "b"]];
+        assert_eq![true, info![logger, "tst", "Message {}", "argument"; "a" => "b",]];
+        assert_eq![true, info![logger, "tst", "Message {}", "argument",;]];
+        assert_eq![true, info![logger, "tst", "Message {}", "argument",; "a" => "b"]];
+        assert_eq![true, info![logger, "tst", "Message {}", "argument",; "a" => "b",]];
+
+        assert_eq![true, warn![logger, "tst", "Message"]];
+        assert_eq![true, warn![logger, "tst", "Message",]];
+        assert_eq![true, warn![logger, "tst", "Message {}", "argument"]];
+        assert_eq![true, warn![logger, "tst", "Message {}", "argument",]];
+        assert_eq![true, warn![logger, "tst", "Message";]];
+        assert_eq![true, warn![logger, "tst", "Message"; "a" => "b"]];
+        assert_eq![true, warn![logger, "tst", "Message"; "a" => "b",]];
+        assert_eq![true, warn![logger, "tst", "Message",;]];
+        assert_eq![true, warn![logger, "tst", "Message",; "a" => "b"]];
+        assert_eq![true, warn![logger, "tst", "Message",; "a" => "b",]];
+        assert_eq![true, warn![logger, "tst", "Message {}", "argument";]];
+        assert_eq![true, warn![logger, "tst", "Message {}", "argument"; "a" => "b"]];
+        assert_eq![true, warn![logger, "tst", "Message {}", "argument"; "a" => "b",]];
+        assert_eq![true, warn![logger, "tst", "Message {}", "argument",;]];
+        assert_eq![true, warn![logger, "tst", "Message {}", "argument",; "a" => "b"]];
+        assert_eq![true, warn![logger, "tst", "Message {}", "argument",; "a" => "b",]];
+
+        assert_eq![true, error![logger, "tst", "Message"]];
+        assert_eq![true, error![logger, "tst", "Message",]];
+        assert_eq![true, error![logger, "tst", "Message {}", "argument"]];
+        assert_eq![true, error![logger, "tst", "Message {}", "argument",]];
+        assert_eq![true, error![logger, "tst", "Message";]];
+        assert_eq![true, error![logger, "tst", "Message"; "a" => "b"]];
+        assert_eq![true, error![logger, "tst", "Message"; "a" => "b",]];
+        assert_eq![true, error![logger, "tst", "Message",;]];
+        assert_eq![true, error![logger, "tst", "Message",; "a" => "b"]];
+        assert_eq![true, error![logger, "tst", "Message",; "a" => "b",]];
+        assert_eq![true, error![logger, "tst", "Message {}", "argument";]];
+        assert_eq![true, error![logger, "tst", "Message {}", "argument"; "a" => "b"]];
+        assert_eq![true, error![logger, "tst", "Message {}", "argument"; "a" => "b",]];
+        assert_eq![true, error![logger, "tst", "Message {}", "argument",;]];
+        assert_eq![true, error![logger, "tst", "Message {}", "argument",; "a" => "b"]];
+        assert_eq![true, error![logger, "tst", "Message {}", "argument",; "a" => "b",]];
     }
 
     // ---
