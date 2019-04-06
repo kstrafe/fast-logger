@@ -193,7 +193,7 @@ use chrono::prelude::*;
 use crossbeam_channel::{bounded, Receiver, RecvError, Sender, TrySendError};
 use std::{
     collections::HashMap,
-    fmt::{self, Display},
+    fmt::{self, Debug, Display},
     marker::Send,
     sync::{
         atomic::{AtomicUsize, Ordering},
@@ -302,8 +302,8 @@ macro_rules! trace {
     ($log:expr, $ctx:expr, $fmt:expr, $($msg:expr),*,; $($key:expr => $val:expr),*) => { $crate::log![255, $log, $ctx, $fmt, $($msg),*; $($key => $val),*] };
     ($log:expr, $ctx:expr, $fmt:expr, $($msg:expr),*,; $($key:expr => $val:expr),*,) => { $crate::log![255, $log, $ctx, $fmt, $($msg),*; $($key => $val),*] };
     ($log:expr, $ctx:expr, $fmt:expr, $($msg:expr),*; $($key:expr => $val:expr),*,) => { $crate::log![255, $log, $ctx, $fmt, $($msg),*; $($key => $val),*] };
-    ($log:expr, $ctx:expr, $fmt:expr; $($key:expr => $val:expr),*) => { $crate::log![255, $log, $ctx, $fmt] };
-    ($log:expr, $ctx:expr, $fmt:expr; $($key:expr => $val:expr),*,) => { $crate::log![255, $log, $ctx, $fmt] };
+    ($log:expr, $ctx:expr, $fmt:expr; $($key:expr => $val:expr),*) => { $crate::log![255, $log, $ctx, $fmt; $($key => $val),*] };
+    ($log:expr, $ctx:expr, $fmt:expr; $($key:expr => $val:expr),*,) => { $crate::log![255, $log, $ctx, $fmt; $($key => $val),*] };
     ($log:expr, $ctx:expr, $fmt:expr, $($msg:expr),*) => { $crate::log![255, $log, $ctx, $fmt, $($msg),*] };
     ($log:expr, $ctx:expr, $fmt:expr, $($msg:expr),*,) => { $crate::log![255, $log, $ctx, $fmt, $($msg),*] };
     ($log:expr, $ctx:expr, $fmt:expr) => { $crate::log![255, $log, $ctx, $fmt] };
@@ -316,8 +316,8 @@ macro_rules! debug {
     ($log:expr, $ctx:expr, $fmt:expr, $($msg:expr),*,; $($key:expr => $val:expr),*) => { $crate::log![192, $log, $ctx, $fmt, $($msg),*; $($key => $val),*] };
     ($log:expr, $ctx:expr, $fmt:expr, $($msg:expr),*,; $($key:expr => $val:expr),*,) => { $crate::log![192, $log, $ctx, $fmt, $($msg),*; $($key => $val),*] };
     ($log:expr, $ctx:expr, $fmt:expr, $($msg:expr),*; $($key:expr => $val:expr),*,) => { $crate::log![192, $log, $ctx, $fmt, $($msg),*; $($key => $val),*] };
-    ($log:expr, $ctx:expr, $fmt:expr; $($key:expr => $val:expr),*) => { $crate::log![192, $log, $ctx, $fmt] };
-    ($log:expr, $ctx:expr, $fmt:expr; $($key:expr => $val:expr),*,) => { $crate::log![192, $log, $ctx, $fmt] };
+    ($log:expr, $ctx:expr, $fmt:expr; $($key:expr => $val:expr),*) => { $crate::log![192, $log, $ctx, $fmt; $($key => $val),*] };
+    ($log:expr, $ctx:expr, $fmt:expr; $($key:expr => $val:expr),*,) => { $crate::log![192, $log, $ctx, $fmt; $($key => $val),*] };
     ($log:expr, $ctx:expr, $fmt:expr, $($msg:expr),*) => { $crate::log![192, $log, $ctx, $fmt, $($msg),*] };
     ($log:expr, $ctx:expr, $fmt:expr, $($msg:expr),*,) => { $crate::log![192, $log, $ctx, $fmt, $($msg),*] };
     ($log:expr, $ctx:expr, $fmt:expr) => { $crate::log![192, $log, $ctx, $fmt] };
@@ -330,8 +330,8 @@ macro_rules! info {
     ($log:expr, $ctx:expr, $fmt:expr, $($msg:expr),*,; $($key:expr => $val:expr),*) => { $crate::log![128, $log, $ctx, $fmt, $($msg),*; $($key => $val),*] };
     ($log:expr, $ctx:expr, $fmt:expr, $($msg:expr),*,; $($key:expr => $val:expr),*,) => { $crate::log![128, $log, $ctx, $fmt, $($msg),*; $($key => $val),*] };
     ($log:expr, $ctx:expr, $fmt:expr, $($msg:expr),*; $($key:expr => $val:expr),*,) => { $crate::log![128, $log, $ctx, $fmt, $($msg),*; $($key => $val),*] };
-    ($log:expr, $ctx:expr, $fmt:expr; $($key:expr => $val:expr),*) => { $crate::log![128, $log, $ctx, $fmt] };
-    ($log:expr, $ctx:expr, $fmt:expr; $($key:expr => $val:expr),*,) => { $crate::log![128, $log, $ctx, $fmt] };
+    ($log:expr, $ctx:expr, $fmt:expr; $($key:expr => $val:expr),*) => { $crate::log![128, $log, $ctx, $fmt; $($key => $val),*] };
+    ($log:expr, $ctx:expr, $fmt:expr; $($key:expr => $val:expr),*,) => { $crate::log![128, $log, $ctx, $fmt; $($key => $val),*] };
     ($log:expr, $ctx:expr, $fmt:expr, $($msg:expr),*) => { $crate::log![128, $log, $ctx, $fmt, $($msg),*] };
     ($log:expr, $ctx:expr, $fmt:expr, $($msg:expr),*,) => { $crate::log![128, $log, $ctx, $fmt, $($msg),*] };
     ($log:expr, $ctx:expr, $fmt:expr) => { $crate::log![128, $log, $ctx, $fmt] };
@@ -344,8 +344,8 @@ macro_rules! warn {
     ($log:expr, $ctx:expr, $fmt:expr, $($msg:expr),*,; $($key:expr => $val:expr),*) => { $crate::log![64, $log, $ctx, $fmt, $($msg),*; $($key => $val),*] };
     ($log:expr, $ctx:expr, $fmt:expr, $($msg:expr),*,; $($key:expr => $val:expr),*,) => { $crate::log![64, $log, $ctx, $fmt, $($msg),*; $($key => $val),*] };
     ($log:expr, $ctx:expr, $fmt:expr, $($msg:expr),*; $($key:expr => $val:expr),*,) => { $crate::log![64, $log, $ctx, $fmt, $($msg),*; $($key => $val),*] };
-    ($log:expr, $ctx:expr, $fmt:expr; $($key:expr => $val:expr),*) => { $crate::log![64, $log, $ctx, $fmt] };
-    ($log:expr, $ctx:expr, $fmt:expr; $($key:expr => $val:expr),*,) => { $crate::log![64, $log, $ctx, $fmt] };
+    ($log:expr, $ctx:expr, $fmt:expr; $($key:expr => $val:expr),*) => { $crate::log![64, $log, $ctx, $fmt; $($key => $val),*] };
+    ($log:expr, $ctx:expr, $fmt:expr; $($key:expr => $val:expr),*,) => { $crate::log![64, $log, $ctx, $fmt; $($key => $val),*] };
     ($log:expr, $ctx:expr, $fmt:expr, $($msg:expr),*) => { $crate::log![64, $log, $ctx, $fmt, $($msg),*] };
     ($log:expr, $ctx:expr, $fmt:expr, $($msg:expr),*,) => { $crate::log![64, $log, $ctx, $fmt, $($msg),*] };
     ($log:expr, $ctx:expr, $fmt:expr) => { $crate::log![64, $log, $ctx, $fmt] };
@@ -358,8 +358,8 @@ macro_rules! error {
     ($log:expr, $ctx:expr, $fmt:expr, $($msg:expr),*,; $($key:expr => $val:expr),*) => { $crate::log![0, $log, $ctx, $fmt, $($msg),*; $($key => $val),*] };
     ($log:expr, $ctx:expr, $fmt:expr, $($msg:expr),*,; $($key:expr => $val:expr),*,) => { $crate::log![0, $log, $ctx, $fmt, $($msg),*; $($key => $val),*] };
     ($log:expr, $ctx:expr, $fmt:expr, $($msg:expr),*; $($key:expr => $val:expr),*,) => { $crate::log![0, $log, $ctx, $fmt, $($msg),*; $($key => $val),*] };
-    ($log:expr, $ctx:expr, $fmt:expr; $($key:expr => $val:expr),*) => { $crate::log![0, $log, $ctx, $fmt] };
-    ($log:expr, $ctx:expr, $fmt:expr; $($key:expr => $val:expr),*,) => { $crate::log![0, $log, $ctx, $fmt] };
+    ($log:expr, $ctx:expr, $fmt:expr; $($key:expr => $val:expr),*) => { $crate::log![0, $log, $ctx, $fmt; $($key => $val),*] };
+    ($log:expr, $ctx:expr, $fmt:expr; $($key:expr => $val:expr),*,) => { $crate::log![0, $log, $ctx, $fmt; $($key => $val),*] };
     ($log:expr, $ctx:expr, $fmt:expr, $($msg:expr),*) => { $crate::log![0, $log, $ctx, $fmt, $($msg),*] };
     ($log:expr, $ctx:expr, $fmt:expr, $($msg:expr),*,) => { $crate::log![0, $log, $ctx, $fmt, $($msg),*] };
     ($log:expr, $ctx:expr, $fmt:expr) => { $crate::log![0, $log, $ctx, $fmt] };
@@ -712,6 +712,16 @@ fn logger_thread<C: Display + Send, W: std::io::Write>(
         {
             break 'outer_loop;
         }
+    }
+}
+
+// ---
+
+pub struct InDebug<T: Debug>(pub T);
+
+impl<T: Debug> Display for InDebug<T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        (&(self.0) as &Debug).fmt(f)
     }
 }
 
@@ -1074,6 +1084,32 @@ mod tests {
         assert_eq![true, error![logger, "tst", "Message {}", "argument",;]];
         assert_eq![true, error![logger, "tst", "Message {}", "argument",; "a" => "b"]];
         assert_eq![true, error![logger, "tst", "Message {}", "argument",; "a" => "b",]];
+    }
+
+    #[test]
+    fn using_indebug() {
+        let mut logger = Logger::<Log>::spawn();
+        #[derive(Clone)]
+        struct Value { }
+        impl std::fmt::Debug for Value {
+            fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+                write![f, "Debug Value"]
+            }
+        }
+        let value = Value { };
+        info![logger, "tst", "Message"; "value" => InDebug(value.clone())];
+    }
+
+    #[test]
+    fn indebug() {
+        struct Value { }
+        impl std::fmt::Debug for Value {
+            fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+                write![f, "Debug Value"]
+            }
+        }
+        let value = Value { };
+        assert_eq!["Debug Value", format!["{}", InDebug(value)]];
     }
 
     // ---
