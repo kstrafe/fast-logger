@@ -717,11 +717,11 @@ fn logger_thread<C: Display + Send, W: std::io::Write>(
 
 // ---
 
-pub struct InDebug<T: Debug>(pub T);
+pub struct InDebug<'a, T: Debug>(pub &'a T);
 
-impl<T: Debug> Display for InDebug<T> {
+impl<'a, T: Debug> Display for InDebug<'a, T> {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        (&(self.0) as &Debug).fmt(f)
+        ((self.0) as &Debug).fmt(f)
     }
 }
 
@@ -1098,7 +1098,7 @@ mod tests {
             }
         }
         let value = Value {};
-        info![logger, "tst", "Message"; "value" => InDebug(value.clone())];
+        info![logger, "tst", "Message"; "value" => InDebug(&value)];
     }
 
     #[test]
@@ -1110,7 +1110,7 @@ mod tests {
             }
         }
         let value = Value {};
-        assert_eq!["Debug Value", format!["{}", InDebug(value)]];
+        assert_eq!["Debug Value", format!["{}", InDebug(&value)]];
     }
 
     // ---
