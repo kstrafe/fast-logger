@@ -190,13 +190,14 @@
 extern crate test;
 
 use chrono::prelude::*;
+use colored::*;
 use crossbeam_channel::{bounded, Receiver, RecvError, Sender, TrySendError};
 use std::{
     collections::HashMap,
     fmt::{self, Debug, Display},
     marker::Send,
     sync::{
-        atomic::{AtomicUsize, Ordering},
+        atomic::{AtomicBool, AtomicUsize, Ordering},
         Arc, Mutex,
     },
     thread::{self, JoinHandle},
@@ -220,6 +221,7 @@ pub struct LoggerV2Async<C: Display + Send> {
     level: Arc<AtomicUsize>,
     log_channel_full_count: Arc<AtomicUsize>,
     thread_handle: Arc<AutoJoinHandle>,
+    colorize: Arc<AtomicBool>,
 }
 
 // ---
@@ -382,6 +384,8 @@ impl<C: 'static + Display + Send> LoggerV2Async<C> {
     /// since you just want a single logging thread to print stuff.
     pub fn spawn() -> Logger<C> {
         let (tx, rx) = bounded(CHANNEL_SIZE);
+        let colorize = Arc::new(AtomicBool::new(false));
+        let colorize_clone = colorize.clone();
         let full_count = Arc::new(AtomicUsize::new(0));
         let full_count_clone = full_count.clone();
         let level = Arc::new(AtomicUsize::new(DEFAULT_LEVEL as usize));
@@ -398,6 +402,7 @@ impl<C: 'static + Display + Send> LoggerV2Async<C> {
                     ex.lock(),
                     context_specific_level_clone,
                     level_clone,
+                    colorize_clone,
                 )
             })
             .unwrap();
@@ -409,6 +414,7 @@ impl<C: 'static + Display + Send> LoggerV2Async<C> {
             log_channel_full_count: full_count,
             level,
             context_specific_level,
+            colorize,
         }
     }
 
@@ -418,6 +424,8 @@ impl<C: 'static + Display + Send> LoggerV2Async<C> {
     /// writer, which makes the logger use any arbitrary writing interface.
     pub fn spawn_with_writer<T: 'static + std::io::Write + Send>(writer: T) -> Logger<C> {
         let (tx, rx) = bounded(CHANNEL_SIZE);
+        let colorize = Arc::new(AtomicBool::new(false));
+        let colorize_clone = colorize.clone();
         let full_count = Arc::new(AtomicUsize::new(0));
         let full_count_clone = full_count.clone();
         let level = Arc::new(AtomicUsize::new(DEFAULT_LEVEL as usize));
@@ -433,6 +441,7 @@ impl<C: 'static + Display + Send> LoggerV2Async<C> {
                     writer,
                     context_specific_level_clone,
                     level_clone,
+                    colorize_clone,
                 )
             })
             .unwrap();
@@ -444,6 +453,7 @@ impl<C: 'static + Display + Send> LoggerV2Async<C> {
             log_channel_full_count: full_count,
             level,
             context_specific_level,
+            colorize,
         }
     }
 
@@ -530,6 +540,10 @@ impl<C: 'static + Display + Send> LoggerV2Async<C> {
     pub fn error(&mut self, ctx: &'static str, message: impl Into<C>) -> bool {
         self.log(0, ctx, message)
     }
+
+    pub fn set_colorize(&mut self, on: bool) {
+        self.colorize.store(on, Ordering::Relaxed);
+    }
 }
 
 impl<C: 'static + Display + Send + From<String>> LoggerV2Async<C> {
@@ -564,11 +578,131 @@ fn count_digits_base_10(mut number: usize) -> usize {
     digits
 }
 
+fn colorize_level(level: u8) -> colored::ColoredString {
+    if level < 64 {
+        format!["{:03}", level].red()
+    } else if level < 128 {
+        format!["{:03}", level].yellow()
+    } else if level < 192 {
+        format!["{:03}", level].green()
+    } else if level < 255 {
+        format!["{:03}", level].cyan()
+    } else if level == 255 {
+        format!["{:03}", level].magenta()
+    } else {
+        unreachable![]
+    }
+}
+
+fn do_write_nocolor<W: std::io::Write, T: Display>(
+    writer: &mut W,
+    lvl: u8,
+    ctx: &'static str,
+    msg: &str,
+    now: T,
+    newlines: usize,
+    last_is_line: bool,
+) -> std::io::Result<()> {
+    if newlines > 1 {
+        for (idx, line) in msg.lines().enumerate() {
+            writeln![
+                writer,
+                "{}: {:03} {} [{:0width$}/{}]: {}",
+                now,
+                lvl,
+                ctx,
+                idx + 1,
+                newlines,
+                line,
+                width = count_digits_base_10(newlines),
+            ]?;
+        }
+        if last_is_line {
+            writeln![
+                writer,
+                "{}: {:03} {} [{}/{}]: ",
+                now, lvl, ctx, newlines, newlines
+            ]?;
+        }
+    } else {
+        writeln![writer, "{}: {:03} {}: {}", now, lvl, ctx, msg,]?;
+    }
+    Ok(())
+}
+
+#[allow(clippy::too_many_arguments)]
+fn do_write_color<W: std::io::Write, T: Display>(
+    writer: &mut W,
+    lvl: u8,
+    ctx: &'static str,
+    msg: &str,
+    now: T,
+    newlines: usize,
+    last_is_line: bool,
+    color_counter: &mut usize,
+) -> std::io::Result<()> {
+    *color_counter = (*color_counter + 1) % 2;
+    let color;
+    match color_counter {
+        0 => color = "blue",
+        1 => color = "magenta",
+        _ => unimplemented![],
+    }
+    let msg_color;
+    match color_counter {
+        0 => msg_color = "bright blue",
+        1 => msg_color = "bright magenta",
+        _ => unimplemented![],
+    }
+    let msg = msg.color(color);
+    if newlines > 1 {
+        for (idx, line) in msg.lines().enumerate() {
+            writeln![
+                writer,
+                "{}: {} {} {}: {}",
+                now.to_string().color(color),
+                colorize_level(lvl),
+                ctx.bright_green(),
+                format![
+                    "[{:0width$}/{}]",
+                    idx + 1,
+                    newlines,
+                    width = count_digits_base_10(newlines),
+                ]
+                .bright_yellow(),
+                line.color(msg_color),
+            ]?;
+        }
+        if last_is_line {
+            writeln![
+                writer,
+                "{}: {} {} {}: ",
+                now.to_string().color(color),
+                colorize_level(lvl),
+                ctx.bright_green(),
+                format!["[{}/{}]", newlines, newlines,].bright_yellow(),
+            ]?;
+        }
+    } else {
+        writeln![
+            writer,
+            "{}: {} {}: {}",
+            now.to_string().color(color),
+            colorize_level(lvl),
+            ctx.bright_green(),
+            msg.color(msg_color),
+        ]?;
+    }
+    Ok(())
+}
+
 fn do_write<C: Display + Send, W: std::io::Write>(
     writer: &mut W,
     lvl: u8,
     ctx: &'static str,
     msg: C,
+    colorize: bool,
+    color_counter: &mut usize,
 ) -> std::io::Result<()> {
     const ITEMS: &[chrono::format::Item] = {
         use chrono::format::{Fixed::*, Item::*, Numeric::*, Pad::*};
@@ -602,31 +736,20 @@ fn do_write<C: Display + Send, W: std::io::Write>(
         }
     }
 
-    if newlines > 1 {
-        for (idx, line) in msg.lines().enumerate() {
-            writeln![
-                writer,
-                "{}: {:03} {} [{:0width$}/{}]: {}",
-                now,
-                lvl,
-                ctx,
-                idx + 1,
-                newlines,
-                line,
-                width = count_digits_base_10(newlines),
-            ]?;
-        }
-        if last_is_line {
-            writeln![
-                writer,
-                "{}: {:03} {} [{}/{}]: ",
-                now, lvl, ctx, newlines, newlines
-            ]?;
-        }
+    if colorize {
+        do_write_color(
+            writer,
+            lvl,
+            ctx,
+            msg.as_str(),
+            now,
+            newlines,
+            last_is_line,
+            color_counter,
+        )
     } else {
-        writeln![writer, "{}: {:03} {}: {}", now, lvl, ctx, msg,]?;
+        do_write_nocolor(writer, lvl, ctx, msg.as_str(), now, newlines, last_is_line)
     }
-    Ok(())
 }
 
 fn logger_thread<C: Display + Send, W: std::io::Write>(
@@ -635,19 +758,41 @@ fn logger_thread<C: Display + Send, W: std::io::Write>(
     mut writer: W,
     context_specific_level: Arc<Mutex<HashMap<&'static str, u8>>>,
     global_level: Arc<AtomicUsize>,
+    colorize: Arc<AtomicBool>,
 ) {
+    let mut color_counter = 0;
+    let mut color;
     'outer_loop: loop {
         match rx.recv() {
             Ok(msg) => {
+                color = colorize.load(Ordering::Relaxed);
                 let lvls = context_specific_level.lock();
                 match lvls {
                     Ok(lvls) => {
                         if let Some(lvl) = lvls.get(msg.1) {
-                            if msg.0 <= *lvl && do_write(&mut writer, msg.0, msg.1, msg.2).is_err()
+                            if msg.0 <= *lvl
+                                && do_write(
+                                    &mut writer,
+                                    msg.0,
+                                    msg.1,
+                                    msg.2,
+                                    color,
+                                    &mut color_counter,
+                                )
+                                .is_err()
                             {
                                 break 'outer_loop;
                             }
-                        } else if do_write(&mut writer, msg.0, msg.1, msg.2).is_err() {
+                        } else if do_write(
+                            &mut writer,
+                            msg.0,
+                            msg.1,
+                            msg.2,
+                            color,
+                            &mut color_counter,
+                        )
+                        .is_err()
+                        {
                             break 'outer_loop;
                         }
                     }
@@ -657,12 +802,15 @@ fn logger_thread<C: Display + Send, W: std::io::Write>(
                             0,
                             "logger",
                             "Context specific level lock has been poisoned. Exiting logger",
+                            color,
+                            &mut color_counter,
                         );
                         break 'outer_loop;
                     }
                 }
             }
             Err(error @ RecvError { .. }) => {
+                color = colorize.load(Ordering::Relaxed);
                 let lvls = context_specific_level.lock();
                 match lvls {
                     Ok(lvls) => {
@@ -676,6 +824,8 @@ fn logger_thread<C: Display + Send, W: std::io::Write>(
                                         "Unable to receive message. Exiting logger, reason={}",
                                         error
                                     ],
+                                    color,
+                                    &mut color_counter,
                                 );
                             }
                         } else if 196 <= global_level.load(Ordering::Relaxed) {
@@ -687,6 +837,8 @@ fn logger_thread<C: Display + Send, W: std::io::Write>(
                                     "Unable to receive message. Exiting logger, reason={}",
                                     error
                                 ],
+                                color,
+                                &mut color_counter,
                             );
                         }
                     }
@@ -707,6 +859,8 @@ fn logger_thread<C: Display + Send, W: std::io::Write>(
                     "Logger dropped messages due to channel overflow, count={}",
                     dropped_messages
                 ],
+                color,
+                &mut color_counter,
             )
             .is_err()
         {
@@ -732,7 +886,6 @@ impl<'a, T: Debug> Display for InDebugPretty<'a, T> {
         write![f, "{:#?}", self.0]
     }
 }
-
 
 // ---
 
@@ -1097,6 +1250,20 @@ mod tests {
     }
 
     #[test]
+    fn colorize() {
+        let mut logger = Logger::<Log>::spawn();
+        logger.set_log_level(255);
+        logger.set_colorize(true);
+        logger.trace("tst", Log::Static("A trace message"));
+        logger.debug("tst", Log::Static("A debug message"));
+        logger.info("tst", Log::Static("An info message"));
+        logger.warn("tst", Log::Static("A warning message"));
+        logger.error("tst", Log::Static("An error message"));
+
+        logger.info("tst", Log::Static("On\nmultiple\nlines\n"));
+    }
+
+    #[test]
     fn using_indebug() {
         let mut logger = Logger::<Log>::spawn();
         #[derive(Clone)]
@@ -1115,7 +1282,10 @@ mod tests {
     #[test]
     fn indebug() {
         assert_eq!["[1, 2, 3]", format!["{}", InDebug(&[1, 2, 3])]];
-        assert_eq!["[\n    1,\n    2,\n    3\n]", format!["{}", InDebugPretty(&[1, 2, 3])]];
+        assert_eq![
+            "[\n    1,\n    2,\n    3\n]",
+            format!["{}", InDebugPretty(&[1, 2, 3])]
+        ];
     }
 
     // ---

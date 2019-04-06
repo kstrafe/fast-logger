@@ -10,6 +10,7 @@ path = "lib.rs"
 
 [dependencies]
 chrono = "0.4.6"
+colored = "1.7"
 crossbeam-channel = "0.3"
 
 [dev-dependencies]
