@@ -996,6 +996,7 @@ mod tests {
         assert_eq![true, error![logger, "tst", "Message"]];
     }
 
+    #[rustfmt::skip]
     #[test]
     fn ensure_all_macro_variants_can_be_used() {
         let mut logger = Logger::<Log>::spawn();
@@ -1090,25 +1091,25 @@ mod tests {
     fn using_indebug() {
         let mut logger = Logger::<Log>::spawn();
         #[derive(Clone)]
-        struct Value { }
+        struct Value {}
         impl std::fmt::Debug for Value {
             fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
                 write![f, "Debug Value"]
             }
         }
-        let value = Value { };
+        let value = Value {};
         info![logger, "tst", "Message"; "value" => InDebug(value.clone())];
     }
 
     #[test]
     fn indebug() {
-        struct Value { }
+        struct Value {}
         impl std::fmt::Debug for Value {
             fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
                 write![f, "Debug Value"]
             }
         }
-        let value = Value { };
+        let value = Value {};
         assert_eq!["Debug Value", format!["{}", InDebug(value)]];
     }
 
