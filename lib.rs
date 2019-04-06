@@ -725,6 +725,15 @@ impl<'a, T: Debug> Display for InDebug<'a, T> {
     }
 }
 
+pub struct InDebugPretty<'a, T: Debug>(pub &'a T);
+
+impl<'a, T: Debug> Display for InDebugPretty<'a, T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write![f, "{:#?}", self.0]
+    }
+}
+
+
 // ---
 
 #[cfg(test)]
@@ -1099,18 +1108,14 @@ mod tests {
         }
         let value = Value {};
         info![logger, "tst", "Message"; "value" => InDebug(&value)];
+        let value = Value {};
+        info![logger, "tst", "Message"; "value" => InDebugPretty(&value)];
     }
 
     #[test]
     fn indebug() {
-        struct Value {}
-        impl std::fmt::Debug for Value {
-            fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-                write![f, "Debug Value"]
-            }
-        }
-        let value = Value {};
-        assert_eq!["Debug Value", format!["{}", InDebug(&value)]];
+        assert_eq!["[1, 2, 3]", format!["{}", InDebug(&[1, 2, 3])]];
+        assert_eq!["[\n    1,\n    2,\n    3\n]", format!["{}", InDebugPretty(&[1, 2, 3])]];
     }
 
     // ---
