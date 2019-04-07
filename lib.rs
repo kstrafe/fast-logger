@@ -630,6 +630,7 @@ fn do_write_nocolor<W: std::io::Write, T: Display>(
     Ok(())
 }
 
+#[allow(clippy::too_many_arguments)]
 fn do_write_color<W: std::io::Write, T: Display>(
     writer: &mut W,
     lvl: u8,
@@ -647,33 +648,50 @@ fn do_write_color<W: std::io::Write, T: Display>(
         1 => color = "magenta",
         _ => unimplemented![],
     }
+    let msg_color;
+    match color_counter {
+        0 => msg_color = "bright blue",
+        1 => msg_color = "bright magenta",
+        _ => unimplemented![],
+    }
+    let msg = msg.color(color);
     if newlines > 1 {
         for (idx, line) in msg.lines().enumerate() {
             writeln![
                 writer,
-                "{}: {} {} [{:0width$}/{}]: {}",
+                "{}: {} {} {}: {}",
                 now.to_string().color(color),
                 colorize_level(lvl),
-                ctx,
-                idx + 1,
-                newlines,
-                line,
-                width = count_digits_base_10(newlines),
+                ctx.bright_green(),
+                format![
+                    "[{:0width$}/{}]",
+                    idx + 1,
+                    newlines,
+                    width = count_digits_base_10(newlines),
+                ]
+                .bright_yellow(),
+                line.color(msg_color),
             ]?;
         }
         if last_is_line {
             writeln![
                 writer,
-                "{}: {} {} [{}/{}]: ",
+                "{}: {} {} {}: ",
                 now.to_string().color(color),
                 colorize_level(lvl),
-                ctx,
-                newlines,
-                newlines
+                ctx.bright_green(),
+                format!["[{}/{}]", newlines, newlines,].bright_yellow(),
             ]?;
         }
     } else {
-        writeln![writer, "{}: {} {}: {}", now.to_string().color(color), colorize_level(lvl), ctx, msg,]?;
+        writeln![
+            writer,
+            "{}: {} {}: {}",
+            now.to_string().color(color),
+            colorize_level(lvl),
+            ctx.bright_green(),
+            msg.color(msg_color),
+        ]?;
     }
     Ok(())
 }
@@ -1242,7 +1260,7 @@ mod tests {
         logger.warn("tst", Log::Static("A warning message"));
         logger.error("tst", Log::Static("An error message"));
 
-        logger.info("tst", Log::Static("On\nmultiple\nlines"));
+        logger.info("tst", Log::Static("On\nmultiple\nlines\n"));
     }
 
     #[test]
