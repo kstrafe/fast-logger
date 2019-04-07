@@ -1120,6 +1120,17 @@ mod tests {
     }
 
     #[test]
+    fn spawn_void() {
+        let mut logger = Logger::<Log>::spawn_void();
+        assert_eq![0, logger.get_log_level()];
+        assert_eq![true, logger.error("tst", Log::Static("Message\n"))];
+        assert_eq![false, logger.warn("tst", Log::Static("Message\n"))];
+        assert_eq![false, logger.info("tst", Log::Static("Message\n"))];
+        assert_eq![false, logger.debug("tst", Log::Static("Message\n"))];
+        assert_eq![false, logger.trace("tst", Log::Static("Message\n"))];
+    }
+
+    #[test]
     fn ensure_proper_message_format_line_ending_with_newline() {
         let store = Arc::new(Mutex::new(vec![]));
         let writer = Store {
