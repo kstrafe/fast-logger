@@ -1328,7 +1328,7 @@ mod tests {
     fn indebug() {
         assert_eq!["[1, 2, 3]", format!["{}", InDebug(&[1, 2, 3])]];
         assert_eq![
-            "[\n    1,\n    2,\n    3\n]",
+            "[\n    1,\n    2,\n    3,\n]",
             format!["{}", InDebugPretty(&[1, 2, 3])]
         ];
     }
