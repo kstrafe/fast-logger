@@ -457,6 +457,51 @@ impl<C: 'static + Display + Send> LoggerV2Async<C> {
         }
     }
 
+    pub fn spawn_void() -> Logger<C> {
+        let (tx, rx) = bounded(CHANNEL_SIZE);
+        let colorize = Arc::new(AtomicBool::new(false));
+        let colorize_clone = colorize.clone();
+        let full_count = Arc::new(AtomicUsize::new(0));
+        let full_count_clone = full_count.clone();
+        let level = Arc::new(AtomicUsize::new(0));
+        let level_clone = level.clone();
+        struct Void {}
+        impl std::io::Write for Void {
+            fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+                Ok(buf.len())
+            }
+            fn flush(&mut self) -> std::io::Result<()> {
+                Ok(())
+            }
+        }
+        let context_specific_level = Arc::new(Mutex::new(HashMap::new()));
+        let context_specific_level_clone = context_specific_level.clone();
+        let logger_thread = thread::Builder::new()
+            .name("logger".to_string())
+            .spawn(move || {
+                logger_thread(
+                    rx,
+                    full_count_clone,
+                    Void {},
+                    context_specific_level_clone,
+                    level_clone,
+                    colorize_clone,
+                )
+            })
+            .unwrap();
+        Logger {
+            thread_handle: Arc::new(AutoJoinHandle {
+                thread: Some(logger_thread),
+            }),
+            log_channel: tx,
+            log_channel_full_count: full_count,
+            level,
+            context_specific_level,
+            colorize,
+        }
+    }
+
+
     /// The log-level is an 8-bit variable that is shared among
     /// all clones of this logger. When we try logging we first
     /// check if our message has a priority higher or equal to
