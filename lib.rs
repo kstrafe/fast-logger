@@ -265,7 +265,10 @@ pub fn make_generic__(
 /// [Generic].
 #[macro_export]
 macro_rules! log {
-    ($n:expr, $log:expr, $ctx:expr, $fmt:expr, $($msg:expr),*; $($key:expr => $val:expr),*) => {{
+    ($n:expr, $log:expr, $ctx:expr, $fmt:expr, $($msg:expr),* $(,)?; $($key:expr => $val:expr),* $(,)?; clone $($cl:ident),* $(,)?) => {{
+        $(
+            let $cl = $cl.clone();
+        )*
         $log.log($n, $ctx, $crate::make_generic__(::std::sync::Arc::new(move |f| -> ::std::fmt::Result {
             Ok({
                 write![f, $fmt, $($msg),*]?;
@@ -275,7 +278,10 @@ macro_rules! log {
             })
         })))
     }};
-    ($n:expr, $log:expr, $ctx:expr, $fmt:expr; $($key:expr => $val:expr),*) => {{
+    ($n:expr, $log:expr, $ctx:expr, $fmt:expr $(,)?; $($key:expr => $val:expr),* $(,)?; clone $($cl:ident),* $(,)?) => {{
+        $(
+            let $cl = $cl.clone();
+        )*
         $log.log($n, $ctx, $crate::make_generic__(::std::sync::Arc::new(move |f| -> ::std::fmt::Result {
             Ok({
                 write![f, $fmt]?;
@@ -285,12 +291,32 @@ macro_rules! log {
             })
         })))
     }};
-    ($n:expr, $log:expr, $ctx:expr, $fmt:expr, $($msg:expr),*) => {{
+    ($n:expr, $log:expr, $ctx:expr, $fmt:expr, $($msg:expr),* $(,)?; $($key:expr => $val:expr),* $(,)?) => {{
+        $log.log($n, $ctx, $crate::make_generic__(::std::sync::Arc::new(move |f| -> ::std::fmt::Result {
+            Ok({
+                write![f, $fmt, $($msg),*]?;
+                $(
+                    write![f, ", {}={}", $key, $val]?;
+                )*
+            })
+        })))
+    }};
+    ($n:expr, $log:expr, $ctx:expr, $fmt:expr; $($key:expr => $val:expr),* $(,)?) => {{
+        $log.log($n, $ctx, $crate::make_generic__(::std::sync::Arc::new(move |f| -> ::std::fmt::Result {
+            Ok({
+                write![f, $fmt]?;
+                $(
+                    write![f, ", {}={}", $key, $val]?;
+                )*
+            })
+        })))
+    }};
+    ($n:expr, $log:expr, $ctx:expr, $fmt:expr, $($msg:expr),* $(,)?) => {{
         $log.log($n, $ctx, $crate::make_generic__(::std::sync::Arc::new(move |f| -> ::std::fmt::Result {
             write![f, $fmt, $($msg),*]
         })))
     }};
-    ($n:expr, $log:expr, $ctx:expr, $fmt:expr) => {{
+    ($n:expr, $log:expr, $ctx:expr, $fmt:expr $(,)?) => {{
         $log.log($n, $ctx, $crate::make_generic__(::std::sync::Arc::new(move |f| -> ::std::fmt::Result {
             write![f, $fmt]
         })))
@@ -300,71 +326,56 @@ macro_rules! log {
 /// Equivalent to [log!] with a level of 255
 #[macro_export]
 macro_rules! trace {
-    ($log:expr, $ctx:expr, $fmt:expr, $($msg:expr),*; $($key:expr => $val:expr),*) => { $crate::log![255, $log, $ctx, $fmt, $($msg),*; $($key => $val),*] };
-    ($log:expr, $ctx:expr, $fmt:expr, $($msg:expr),*,; $($key:expr => $val:expr),*) => { $crate::log![255, $log, $ctx, $fmt, $($msg),*; $($key => $val),*] };
-    ($log:expr, $ctx:expr, $fmt:expr, $($msg:expr),*,; $($key:expr => $val:expr),*,) => { $crate::log![255, $log, $ctx, $fmt, $($msg),*; $($key => $val),*] };
-    ($log:expr, $ctx:expr, $fmt:expr, $($msg:expr),*; $($key:expr => $val:expr),*,) => { $crate::log![255, $log, $ctx, $fmt, $($msg),*; $($key => $val),*] };
-    ($log:expr, $ctx:expr, $fmt:expr; $($key:expr => $val:expr),*) => { $crate::log![255, $log, $ctx, $fmt; $($key => $val),*] };
-    ($log:expr, $ctx:expr, $fmt:expr; $($key:expr => $val:expr),*,) => { $crate::log![255, $log, $ctx, $fmt; $($key => $val),*] };
-    ($log:expr, $ctx:expr, $fmt:expr, $($msg:expr),*) => { $crate::log![255, $log, $ctx, $fmt, $($msg),*] };
-    ($log:expr, $ctx:expr, $fmt:expr, $($msg:expr),*,) => { $crate::log![255, $log, $ctx, $fmt, $($msg),*] };
-    ($log:expr, $ctx:expr, $fmt:expr) => { $crate::log![255, $log, $ctx, $fmt] };
+    ($log:expr, $ctx:expr, $fmt:expr, $($msg:expr),* $(,)?; $($key:expr => $val:expr),* $(,)?; clone $($cl:ident),* $(,)?) => { $crate::log![255, $log, $ctx, $fmt, $($msg),*; $($key => $val),*; clone $($cl),*] };
+    ($log:expr, $ctx:expr, $fmt:expr $(,)?; $($key:expr => $val:expr),* $(,)?; clone $($cl:ident),* $(,)?) => { $crate::log![255, $log, $ctx, $fmt; $($key => $val),*; clone $($cl),*] };
+    ($log:expr, $ctx:expr, $fmt:expr, $($msg:expr),* $(,)?; $($key:expr => $val:expr),* $(,)?) => { $crate::log![255, $log, $ctx, $fmt, $($msg),*; $($key => $val),*] };
+    ($log:expr, $ctx:expr, $fmt:expr $(,)?; $($key:expr => $val:expr),* $(,)?) => { $crate::log![255, $log, $ctx, $fmt; $($key => $val),*] };
+    ($log:expr, $ctx:expr, $fmt:expr, $($msg:expr),* $(,)?) => { $crate::log![255, $log, $ctx, $fmt, $($msg),*] };
+    ($log:expr, $ctx:expr, $fmt:expr $(,)?) => { $crate::log![255, $log, $ctx, $fmt] };
 }
 
 /// Equivalent to [log!] with a level of 196
 #[macro_export]
 macro_rules! debug {
-    ($log:expr, $ctx:expr, $fmt:expr, $($msg:expr),*; $($key:expr => $val:expr),*) => { $crate::log![192, $log, $ctx, $fmt, $($msg),*; $($key => $val),*] };
-    ($log:expr, $ctx:expr, $fmt:expr, $($msg:expr),*,; $($key:expr => $val:expr),*) => { $crate::log![192, $log, $ctx, $fmt, $($msg),*; $($key => $val),*] };
-    ($log:expr, $ctx:expr, $fmt:expr, $($msg:expr),*,; $($key:expr => $val:expr),*,) => { $crate::log![192, $log, $ctx, $fmt, $($msg),*; $($key => $val),*] };
-    ($log:expr, $ctx:expr, $fmt:expr, $($msg:expr),*; $($key:expr => $val:expr),*,) => { $crate::log![192, $log, $ctx, $fmt, $($msg),*; $($key => $val),*] };
-    ($log:expr, $ctx:expr, $fmt:expr; $($key:expr => $val:expr),*) => { $crate::log![192, $log, $ctx, $fmt; $($key => $val),*] };
-    ($log:expr, $ctx:expr, $fmt:expr; $($key:expr => $val:expr),*,) => { $crate::log![192, $log, $ctx, $fmt; $($key => $val),*] };
-    ($log:expr, $ctx:expr, $fmt:expr, $($msg:expr),*) => { $crate::log![192, $log, $ctx, $fmt, $($msg),*] };
-    ($log:expr, $ctx:expr, $fmt:expr, $($msg:expr),*,) => { $crate::log![192, $log, $ctx, $fmt, $($msg),*] };
-    ($log:expr, $ctx:expr, $fmt:expr) => { $crate::log![192, $log, $ctx, $fmt] };
+    ($log:expr, $ctx:expr, $fmt:expr, $($msg:expr),* $(,)?; $($key:expr => $val:expr),* $(,)?; clone $($cl:ident),* $(,)?) => { $crate::log![192, $log, $ctx, $fmt, $($msg),*; $($key => $val),*; clone $($cl),*] };
+    ($log:expr, $ctx:expr, $fmt:expr $(,)?; $($key:expr => $val:expr),* $(,)?; clone $($cl:ident),* $(,)?) => { $crate::log![192, $log, $ctx, $fmt; $($key => $val),*; clone $($cl),*] };
+    ($log:expr, $ctx:expr, $fmt:expr, $($msg:expr),* $(,)?; $($key:expr => $val:expr),* $(,)?) => { $crate::log![192, $log, $ctx, $fmt, $($msg),*; $($key => $val),*] };
+    ($log:expr, $ctx:expr, $fmt:expr $(,)?; $($key:expr => $val:expr),* $(,)?) => { $crate::log![192, $log, $ctx, $fmt; $($key => $val),*] };
+    ($log:expr, $ctx:expr, $fmt:expr, $($msg:expr),* $(,)?) => { $crate::log![192, $log, $ctx, $fmt, $($msg),*] };
+    ($log:expr, $ctx:expr, $fmt:expr $(,)?) => { $crate::log![192, $log, $ctx, $fmt] };
 }
 
 /// Equivalent to [log!] with a level of 128
 #[macro_export]
 macro_rules! info {
-    ($log:expr, $ctx:expr, $fmt:expr, $($msg:expr),*; $($key:expr => $val:expr),*) => { $crate::log![128, $log, $ctx, $fmt, $($msg),*; $($key => $val),*] };
-    ($log:expr, $ctx:expr, $fmt:expr, $($msg:expr),*,; $($key:expr => $val:expr),*) => { $crate::log![128, $log, $ctx, $fmt, $($msg),*; $($key => $val),*] };
-    ($log:expr, $ctx:expr, $fmt:expr, $($msg:expr),*,; $($key:expr => $val:expr),*,) => { $crate::log![128, $log, $ctx, $fmt, $($msg),*; $($key => $val),*] };
-    ($log:expr, $ctx:expr, $fmt:expr, $($msg:expr),*; $($key:expr => $val:expr),*,) => { $crate::log![128, $log, $ctx, $fmt, $($msg),*; $($key => $val),*] };
-    ($log:expr, $ctx:expr, $fmt:expr; $($key:expr => $val:expr),*) => { $crate::log![128, $log, $ctx, $fmt; $($key => $val),*] };
-    ($log:expr, $ctx:expr, $fmt:expr; $($key:expr => $val:expr),*,) => { $crate::log![128, $log, $ctx, $fmt; $($key => $val),*] };
-    ($log:expr, $ctx:expr, $fmt:expr, $($msg:expr),*) => { $crate::log![128, $log, $ctx, $fmt, $($msg),*] };
-    ($log:expr, $ctx:expr, $fmt:expr, $($msg:expr),*,) => { $crate::log![128, $log, $ctx, $fmt, $($msg),*] };
-    ($log:expr, $ctx:expr, $fmt:expr) => { $crate::log![128, $log, $ctx, $fmt] };
+    ($log:expr, $ctx:expr, $fmt:expr, $($msg:expr),* $(,)?; $($key:expr => $val:expr),* $(,)?; clone $($cl:ident),* $(,)?) => { $crate::log![128, $log, $ctx, $fmt, $($msg),*; $($key => $val),*; clone $($cl),*] };
+    ($log:expr, $ctx:expr, $fmt:expr $(,)?; $($key:expr => $val:expr),* $(,)?; clone $($cl:ident),* $(,)?) => { $crate::log![128, $log, $ctx, $fmt; $($key => $val),*; clone $($cl),*] };
+    ($log:expr, $ctx:expr, $fmt:expr, $($msg:expr),* $(,)?; $($key:expr => $val:expr),* $(,)?) => { $crate::log![128, $log, $ctx, $fmt, $($msg),*; $($key => $val),*] };
+    ($log:expr, $ctx:expr, $fmt:expr $(,)?; $($key:expr => $val:expr),* $(,)?) => { $crate::log![128, $log, $ctx, $fmt; $($key => $val),*] };
+    ($log:expr, $ctx:expr, $fmt:expr, $($msg:expr),* $(,)?) => { $crate::log![128, $log, $ctx, $fmt, $($msg),*] };
+    ($log:expr, $ctx:expr, $fmt:expr $(,)?) => { $crate::log![128, $log, $ctx, $fmt] };
 }
 
 /// Equivalent to [log!] with a level of 64
 #[macro_export]
 macro_rules! warn {
-    ($log:expr, $ctx:expr, $fmt:expr, $($msg:expr),*; $($key:expr => $val:expr),*) => { $crate::log![64, $log, $ctx, $fmt, $($msg),*; $($key => $val),*] };
-    ($log:expr, $ctx:expr, $fmt:expr, $($msg:expr),*,; $($key:expr => $val:expr),*) => { $crate::log![64, $log, $ctx, $fmt, $($msg),*; $($key => $val),*] };
-    ($log:expr, $ctx:expr, $fmt:expr, $($msg:expr),*,; $($key:expr => $val:expr),*,) => { $crate::log![64, $log, $ctx, $fmt, $($msg),*; $($key => $val),*] };
-    ($log:expr, $ctx:expr, $fmt:expr, $($msg:expr),*; $($key:expr => $val:expr),*,) => { $crate::log![64, $log, $ctx, $fmt, $($msg),*; $($key => $val),*] };
-    ($log:expr, $ctx:expr, $fmt:expr; $($key:expr => $val:expr),*) => { $crate::log![64, $log, $ctx, $fmt; $($key => $val),*] };
-    ($log:expr, $ctx:expr, $fmt:expr; $($key:expr => $val:expr),*,) => { $crate::log![64, $log, $ctx, $fmt; $($key => $val),*] };
-    ($log:expr, $ctx:expr, $fmt:expr, $($msg:expr),*) => { $crate::log![64, $log, $ctx, $fmt, $($msg),*] };
-    ($log:expr, $ctx:expr, $fmt:expr, $($msg:expr),*,) => { $crate::log![64, $log, $ctx, $fmt, $($msg),*] };
-    ($log:expr, $ctx:expr, $fmt:expr) => { $crate::log![64, $log, $ctx, $fmt] };
+    ($log:expr, $ctx:expr, $fmt:expr, $($msg:expr),* $(,)?; $($key:expr => $val:expr),* $(,)?; clone $($cl:ident),* $(,)?) => { $crate::log![64, $log, $ctx, $fmt, $($msg),*; $($key => $val),*; clone $($cl),*] };
+    ($log:expr, $ctx:expr, $fmt:expr $(,)?; $($key:expr => $val:expr),* $(,)?; clone $($cl:ident),* $(,)?) => { $crate::log![64, $log, $ctx, $fmt; $($key => $val),*; clone $($cl),*] };
+    ($log:expr, $ctx:expr, $fmt:expr, $($msg:expr),* $(,)?; $($key:expr => $val:expr),* $(,)?) => { $crate::log![64, $log, $ctx, $fmt, $($msg),*; $($key => $val),*] };
+    ($log:expr, $ctx:expr, $fmt:expr $(,)?; $($key:expr => $val:expr),* $(,)?) => { $crate::log![64, $log, $ctx, $fmt; $($key => $val),*] };
+    ($log:expr, $ctx:expr, $fmt:expr, $($msg:expr),* $(,)?) => { $crate::log![64, $log, $ctx, $fmt, $($msg),*] };
+    ($log:expr, $ctx:expr, $fmt:expr $(,)?) => { $crate::log![64, $log, $ctx, $fmt] };
 }
 
 /// Equivalent to [log!] with a level of 0
 #[macro_export]
 macro_rules! error {
-    ($log:expr, $ctx:expr, $fmt:expr, $($msg:expr),*; $($key:expr => $val:expr),*) => { $crate::log![0, $log, $ctx, $fmt, $($msg),*; $($key => $val),*] };
-    ($log:expr, $ctx:expr, $fmt:expr, $($msg:expr),*,; $($key:expr => $val:expr),*) => { $crate::log![0, $log, $ctx, $fmt, $($msg),*; $($key => $val),*] };
-    ($log:expr, $ctx:expr, $fmt:expr, $($msg:expr),*,; $($key:expr => $val:expr),*,) => { $crate::log![0, $log, $ctx, $fmt, $($msg),*; $($key => $val),*] };
-    ($log:expr, $ctx:expr, $fmt:expr, $($msg:expr),*; $($key:expr => $val:expr),*,) => { $crate::log![0, $log, $ctx, $fmt, $($msg),*; $($key => $val),*] };
-    ($log:expr, $ctx:expr, $fmt:expr; $($key:expr => $val:expr),*) => { $crate::log![0, $log, $ctx, $fmt; $($key => $val),*] };
-    ($log:expr, $ctx:expr, $fmt:expr; $($key:expr => $val:expr),*,) => { $crate::log![0, $log, $ctx, $fmt; $($key => $val),*] };
-    ($log:expr, $ctx:expr, $fmt:expr, $($msg:expr),*) => { $crate::log![0, $log, $ctx, $fmt, $($msg),*] };
-    ($log:expr, $ctx:expr, $fmt:expr, $($msg:expr),*,) => { $crate::log![0, $log, $ctx, $fmt, $($msg),*] };
-    ($log:expr, $ctx:expr, $fmt:expr) => { $crate::log![0, $log, $ctx, $fmt] };
+    ($log:expr, $ctx:expr, $fmt:expr, $($msg:expr),* $(,)?; $($key:expr => $val:expr),* $(,)?; clone $($cl:ident),* $(,)?) => { $crate::log![0, $log, $ctx, $fmt, $($msg),*; $($key => $val),*; clone $($cl),*] };
+    ($log:expr, $ctx:expr, $fmt:expr $(,)?; $($key:expr => $val:expr),* $(,)?; clone $($cl:ident),* $(,)?) => { $crate::log![0, $log, $ctx, $fmt; $($key => $val),*; clone $($cl),*] };
+    ($log:expr, $ctx:expr, $fmt:expr, $($msg:expr),* $(,)?; $($key:expr => $val:expr),* $(,)?) => { $crate::log![0, $log, $ctx, $fmt, $($msg),*; $($key => $val),*] };
+    ($log:expr, $ctx:expr, $fmt:expr $(,)?; $($key:expr => $val:expr),* $(,)?) => { $crate::log![0, $log, $ctx, $fmt; $($key => $val),*] };
+    ($log:expr, $ctx:expr, $fmt:expr, $($msg:expr),* $(,)?) => { $crate::log![0, $log, $ctx, $fmt, $($msg),*] };
+    ($log:expr, $ctx:expr, $fmt:expr $(,)?) => { $crate::log![0, $log, $ctx, $fmt] };
 }
 
 // ---
@@ -500,7 +511,6 @@ impl<C: 'static + Display + Send> LoggerV2Async<C> {
             colorize,
         }
     }
-
 
     /// The log-level is an 8-bit variable that is shared among
     /// all clones of this logger. When we try logging we first
@@ -1303,6 +1313,14 @@ mod tests {
         assert_eq![true, error![logger, "tst", "Message {}", "argument",;]];
         assert_eq![true, error![logger, "tst", "Message {}", "argument",; "a" => "b"]];
         assert_eq![true, error![logger, "tst", "Message {}", "argument",; "a" => "b",]];
+
+        let value = 123;
+        assert_eq![false, trace![logger, "tst", "Message {}", value;; clone value]];
+        assert_eq![false, debug![logger, "tst", "Message {}", value;; clone value]];
+        assert_eq![true, info![logger, "tst", "Message {}", value;; clone value]];
+        assert_eq![true, warn![logger, "tst", "Message {}", value;; clone value]];
+        assert_eq![true, error![logger, "tst", "Message {}", value;; clone value]];
+        assert_eq![true, log![128, logger, "tst", "Message {}", value;; clone value]];
     }
 
     #[test]
@@ -1330,9 +1348,8 @@ mod tests {
             }
         }
         let value = Value {};
-        info![logger, "tst", "Message"; "value" => InDebug(&value)];
-        let value = Value {};
-        info![logger, "tst", "Message"; "value" => InDebugPretty(&value)];
+        info![logger, "tst", "Message"; "value" => InDebug(&value); clone value];
+        info![logger, "tst", "Message"; "value" => InDebugPretty(&value); clone value];
     }
 
     #[test]
