@@ -600,6 +600,7 @@ impl<C: 'static + Display + Send> LoggerV2Async<C> {
         self.log(0, ctx, message)
     }
 
+    /// Enable colorizing log output
     pub fn set_colorize(&mut self, on: bool) {
         self.colorize.store(on, Ordering::Relaxed);
     }
