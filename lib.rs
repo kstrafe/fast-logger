@@ -468,6 +468,10 @@ impl<C: 'static + Display + Send> LoggerV2Async<C> {
         }
     }
 
+    /// Spawn a logger that doesn't output anything
+    ///
+    /// This logger automatically sets the log level to 0, if you set the log level to something
+    /// other than that the message will be sent, but it will be completely ignored.
     pub fn spawn_void() -> Logger<C> {
         let (tx, rx) = bounded(CHANNEL_SIZE);
         let colorize = Arc::new(AtomicBool::new(false));
