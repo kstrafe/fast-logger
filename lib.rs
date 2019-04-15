@@ -194,7 +194,7 @@ use colored::*;
 use crossbeam_channel::{bounded, Receiver, RecvError, Sender, TrySendError};
 use std::{
     collections::HashMap,
-    fmt::{self, Debug, Display},
+    fmt::{self, Debug, Display, LowerHex},
     marker::Send,
     sync::{
         atomic::{AtomicBool, AtomicUsize, Ordering},
@@ -947,6 +947,14 @@ impl<'a, T: Debug> Display for InDebugPretty<'a, T> {
     }
 }
 
+pub struct InHex<'a, T: LowerHex>(pub &'a T);
+
+impl<'a, T: LowerHex> Display for InHex<'a, T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        ((self.0) as &LowerHex).fmt(f)
+    }
+}
+
 // ---
 
 #[cfg(test)]
@@ -958,9 +966,14 @@ mod tests {
 
     // ---
 
+    static TIME_CUT: usize = 37;
+
+    // ---
+
     enum Log {
         Static(&'static str),
         Complex(&'static str, f32, &'static [u8]),
+        Generic(Generic),
     }
     impl Display for Log {
         fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
@@ -973,7 +986,13 @@ mod tests {
                     }
                     Ok(())
                 }
+                Log::Generic(generic) => generic.fmt(f),
             }
+        }
+    }
+    impl From<Generic> for Log {
+        fn from(generic: Generic) -> Self {
+            Log::Generic(generic)
         }
     }
 
@@ -1219,11 +1238,6 @@ mod tests {
 
     #[test]
     fn custom_writer_with_generic() {
-        impl From<Generic> for Log {
-            fn from(_: Generic) -> Self {
-                Log::Static("Unable to convert")
-            }
-        }
         let mut logger = Logger::<Log>::spawn();
         assert_eq![true, logger.error("tst", Log::Static("Message"))];
         assert_eq![true, error![logger, "tst", "Message"]];
@@ -1358,12 +1372,35 @@ mod tests {
     }
 
     #[test]
+    fn using_inhex() {
+        let store = Arc::new(Mutex::new(vec![]));
+        let writer = Store {
+            store: store.clone(),
+        };
+        let mut logger = Logger::<Log>::spawn_with_writer(writer);
+        logger.set_log_level(128);
+
+        info![logger, "tst", "Message"; "value" => InHex(&!127u32)];
+
+        std::mem::drop(logger);
+        assert_eq![
+            "128 tst: Message, value=ffffff80\n",
+            &String::from_utf8(store.lock().unwrap().to_vec()).unwrap()[TIME_CUT..]
+        ];
+    }
+
+    #[test]
     fn indebug() {
         assert_eq!["[1, 2, 3]", format!["{}", InDebug(&[1, 2, 3])]];
         assert_eq![
             "[\n    1,\n    2,\n    3,\n]",
             format!["{}", InDebugPretty(&[1, 2, 3])]
         ];
+    }
+
+    #[test]
+    fn inhex() {
+        assert_eq!["ffffff80", format!["{}", InHex(&!127u32)]];
     }
 
     // ---
