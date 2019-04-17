@@ -23,9 +23,9 @@
 //! We normally use the helper functions `trace`, `debug`, `info`, `warn`, and `error`, which have
 //! the corresponding log levels: 255, 192, 128, 64, 0, respectively.
 //!
-//! Trace is disabled with debug_assertions off.
+//! Trace is disabled with `debug_assertions` off.
 //!
-//! Note: an `error` message priority 0, and log levels are always unsigned, so an `error` message
+//! Note: an `error` message has priority 0, and log levels are always unsigned, so an `error` message
 //! can never be filtered.
 //!
 //! # Example - Generic #
@@ -184,6 +184,26 @@
 //!
 //!     // This gets printed, because the context is different
 //!     logger.log(128, "ctx*", format!("4"));
+//! }
+//! ```
+//!
+//! # Non-Copy Data #
+//!
+//! Data that is non-copy may be hard to pass to the logger, to alleviate this, there's a builtin
+//! clone directive in the macros:
+//!
+//! ```
+//! use logger::{info, Generic, InDebug, Logger};
+//!
+//! #[derive(Clone, Debug)]
+//! struct MyStruct();
+//!
+//! fn main() {
+//!     let mut logger = Logger::<Generic>::spawn();
+//!     let my_struct = MyStruct();
+//!     info![logger, "context", "Message {}", "More"; "key" => InDebug(&my_struct); clone
+//!     my_struct];
+//!     info![logger, "context", "Message {}", "More"; "key" => InDebug(&my_struct)];
 //! }
 //! ```
 #![feature(test)]
@@ -516,6 +536,46 @@ impl<C: 'static + Display + Send> LoggerV2Async<C> {
         }
     }
 
+    /// Create a logger object for tests
+    ///
+    /// Similar to `spawn` but sets the log level to 255 and enables colored output,
+    /// logs to `stderr`.
+    pub fn spawn_test() -> Logger<C> {
+        let (tx, rx) = bounded(CHANNEL_SIZE);
+        let colorize = Arc::new(AtomicBool::new(true));
+        let colorize_clone = colorize.clone();
+        let full_count = Arc::new(AtomicUsize::new(0));
+        let full_count_clone = full_count.clone();
+        let level = Arc::new(AtomicUsize::new(255));
+        let level_clone = level.clone();
+        let ex = std::io::stderr();
+        let context_specific_level = Arc::new(Mutex::new(HashMap::new()));
+        let context_specific_level_clone = context_specific_level.clone();
+        let logger_thread = thread::Builder::new()
+            .name("logger".to_string())
+            .spawn(move || {
+                logger_thread(
+                    rx,
+                    full_count_clone,
+                    ex.lock(),
+                    context_specific_level_clone,
+                    level_clone,
+                    colorize_clone,
+                )
+            })
+            .unwrap();
+        Logger {
+            thread_handle: Arc::new(AutoJoinHandle {
+                thread: Some(logger_thread),
+            }),
+            log_channel: tx,
+            log_channel_full_count: full_count,
+            level,
+            context_specific_level,
+            colorize,
+        }
+    }
+
     /// The log-level is an 8-bit variable that is shared among
     /// all clones of this logger. When we try logging we first
     /// check if our message has a priority higher or equal to
@@ -603,6 +663,11 @@ impl<C: 'static + Display + Send> LoggerV2Async<C> {
     /// Enable colorizing log output
     pub fn set_colorize(&mut self, on: bool) {
         self.colorize.store(on, Ordering::Relaxed);
+    }
+
+    /// Check the current colorization status
+    pub fn get_colorize(&mut self) -> bool {
+        self.colorize.load(Ordering::Relaxed)
     }
 }
 
@@ -1354,6 +1419,25 @@ mod tests {
         logger.error("tst", Log::Static("An error message"));
 
         logger.info("tst", Log::Static("On\nmultiple\nlines\n"));
+    }
+
+    #[test]
+    fn test_spawn_test() {
+        let mut logger = Logger::<Log>::spawn_test();
+
+        assert_eq![255, logger.get_log_level()];
+
+        assert_eq![true, logger.get_colorize()];
+
+        #[cfg(debug_assertions)]
+        assert_eq![true, logger.trace("tst", Log::Static("A trace message"))];
+        #[cfg(not(debug_assertions))]
+        assert_eq![false, logger.trace("tst", Log::Static("A trace message"))];
+
+        assert_eq![true, logger.debug("tst", Log::Static("A debug message"))];
+        assert_eq![true, logger.info("tst", Log::Static("An info message"))];
+        assert_eq![true, logger.warn("tst", Log::Static("A warning message"))];
+        assert_eq![true, logger.error("tst", Log::Static("An error message"))];
     }
 
     #[test]
