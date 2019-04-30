@@ -1031,7 +1031,13 @@ mod tests {
 
     // ---
 
-    static TIME_CUT: usize = 37;
+    fn remove_time(line: &str) -> String {
+        let regex = Regex::new(
+            r"^(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec) \d{1,2} \d+ \d{2}:\d{2}:\d{2}.\d{9}(\+|-)\d{4}: (.*)",
+        )
+        .unwrap();
+        regex.captures_iter(&line).next().unwrap()[3].to_string()
+    }
 
     // ---
 
@@ -1468,8 +1474,8 @@ mod tests {
 
         std::mem::drop(logger);
         assert_eq![
-            "128 tst: Message, value=ffffff80\n",
-            &String::from_utf8(store.lock().unwrap().to_vec()).unwrap()[TIME_CUT..]
+            "128 tst: Message, value=ffffff80",
+            remove_time(&String::from_utf8(store.lock().unwrap().to_vec()).unwrap()),
         ];
     }
 
