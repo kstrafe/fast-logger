@@ -354,7 +354,7 @@ macro_rules! trace {
     ($log:expr, $ctx:expr, $fmt:expr $(,)?) => { $crate::log![255, $log, $ctx, $fmt] };
 }
 
-/// Equivalent to [log!] with a level of 196
+/// Equivalent to [log!] with a level of 192
 #[macro_export]
 macro_rules! debug {
     ($log:expr, $ctx:expr, $fmt:expr, $($msg:expr),* $(,)?; $($key:expr => $val:expr),* $(,)?; clone $($cl:ident),* $(,)?) => { $crate::log![192, $log, $ctx, $fmt, $($msg),*; $($key => $val),*; clone $($cl),*] };
@@ -1039,6 +1039,18 @@ mod tests {
         regex.captures_iter(&line).next().unwrap()[3].to_string()
     }
 
+    fn read_messages_without_date(delegate: fn(&mut Logger<Log>)) -> Vec<String> {
+        let store = Arc::new(Mutex::new(vec![]));
+        let writer = Store {
+            store: store.clone(),
+        };
+        let mut logger = Logger::<Log>::spawn_with_writer(writer);
+        delegate(&mut logger);
+        std::mem::drop(logger);
+        let string = String::from_utf8(store.lock().unwrap().to_vec()).unwrap();
+        string.lines().map(remove_time).collect()
+    }
+
     // ---
 
     enum Log {
@@ -1253,6 +1265,27 @@ mod tests {
             regex.is_match(&String::from_utf8(store.lock().unwrap().to_vec()).unwrap()),
             String::from_utf8(store.lock().unwrap().to_vec()).unwrap()
         ];
+    }
+
+    #[test]
+    fn multistuff() {
+        let lines = read_messages_without_date(|lgr| {
+            trace![lgr, "tracing", "Message 1"];
+            debug![lgr, "debugging", "Message 2"];
+            info![lgr, "infoing", "Message 3"];
+            warn![lgr, "warning", "Message 4"];
+            error![lgr, "erroring", "Message 5"];
+            log![123, lgr, "logging", "Message 6"];
+            log![191, lgr, "overdebug", "This gets filtered"];
+            lgr.set_log_level(191);
+            log![191, lgr, "overdebug", "Just above debugging worked"];
+        });
+        assert_eq![5, lines.len()];
+        assert_eq!["128 infoing: Message 3", lines[0]];
+        assert_eq!["064 warning: Message 4", lines[1]];
+        assert_eq!["000 erroring: Message 5", lines[2]];
+        assert_eq!["123 logging: Message 6", lines[3]];
+        assert_eq!["191 overdebug: Just above debugging worked", lines[4]];
     }
 
     #[test]
