@@ -246,6 +246,43 @@ pub struct LoggerV2Async<C: Display + Send> {
 
 // ---
 
+/// Trait for a generic logger, allows [Logpass] to pass [Generic] to this logger
+pub trait GenericLogger {
+    /// Log a generic message, used by [Logpass]
+    fn log_generic(&mut self, level: u8, ctx: &'static str, message: Generic) -> bool;
+    /// Consume this logger to create a logpass
+    fn to_logpass(self) -> Logpass;
+}
+
+impl<C: 'static + Display + From<Generic> + Send> GenericLogger for LoggerV2Async<C> {
+    fn log_generic(&mut self, level: u8, ctx: &'static str, message: Generic) -> bool {
+        self.log(level, ctx, message)
+    }
+    fn to_logpass(self) -> Logpass {
+        Logpass {
+            passthrough: Box::new(self),
+        }
+    }
+}
+
+// ---
+
+/// A passthrough-logger
+///
+/// This structure holds a reference to another logger and passes all messages along, the messages
+/// can only be of the type [Generic].
+pub struct Logpass {
+    passthrough: Box<dyn GenericLogger>,
+}
+
+impl Logpass {
+    pub fn log(&mut self, level: u8, ctx: &'static str, message: Generic) -> bool {
+        self.passthrough.log_generic(level, ctx, message)
+    }
+}
+
+// ---
+
 /// Wrapper for [JoinHandle], joins on [drop]
 struct AutoJoinHandle {
     thread: Option<JoinHandle<()>>,
