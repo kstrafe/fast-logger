@@ -217,7 +217,7 @@ use std::{
     fmt::{self, Debug, Display, LowerHex},
     marker::Send,
     sync::{
-        atomic::{AtomicBool, AtomicUsize, Ordering},
+        atomic::{AtomicBool, AtomicU8, AtomicUsize, Ordering},
         Arc, Mutex,
     },
     thread::{self, JoinHandle},
@@ -238,7 +238,7 @@ pub struct LoggerV2Async<C: Display + Send> {
     // Explicitly first so it's the first to drop
     log_channel: Sender<(u8, &'static str, C)>,
     context_specific_level: Arc<Mutex<HashMap<&'static str, u8>>>,
-    level: Arc<AtomicUsize>,
+    level: Arc<AtomicU8>,
     log_channel_full_count: Arc<AtomicUsize>,
     thread_handle: Arc<AutoJoinHandle>,
     colorize: Arc<AtomicBool>,
@@ -402,6 +402,7 @@ macro_rules! error {
 
 static CHANNEL_SIZE: usize = 30_000;
 static DEFAULT_LEVEL: u8 = 128;
+static LOGGER_QUIT_LEVEL: u8 = 196;
 
 impl<C: 'static + Display + Send> LoggerV2Async<C> {
     /// Create a logger object and spawn a logging thread
@@ -419,7 +420,7 @@ impl<C: 'static + Display + Send> LoggerV2Async<C> {
         let colorize_clone = colorize.clone();
         let full_count = Arc::new(AtomicUsize::new(0));
         let full_count_clone = full_count.clone();
-        let level = Arc::new(AtomicUsize::new(DEFAULT_LEVEL as usize));
+        let level = Arc::new(AtomicU8::new(DEFAULT_LEVEL));
         let level_clone = level.clone();
         let ex = std::io::stdout();
         let context_specific_level = Arc::new(Mutex::new(HashMap::new()));
@@ -459,7 +460,7 @@ impl<C: 'static + Display + Send> LoggerV2Async<C> {
         let colorize_clone = colorize.clone();
         let full_count = Arc::new(AtomicUsize::new(0));
         let full_count_clone = full_count.clone();
-        let level = Arc::new(AtomicUsize::new(DEFAULT_LEVEL as usize));
+        let level = Arc::new(AtomicU8::new(DEFAULT_LEVEL));
         let level_clone = level.clone();
         let context_specific_level = Arc::new(Mutex::new(HashMap::new()));
         let context_specific_level_clone = context_specific_level.clone();
@@ -498,7 +499,7 @@ impl<C: 'static + Display + Send> LoggerV2Async<C> {
         let colorize_clone = colorize.clone();
         let full_count = Arc::new(AtomicUsize::new(0));
         let full_count_clone = full_count.clone();
-        let level = Arc::new(AtomicUsize::new(0));
+        let level = Arc::new(AtomicU8::new(0));
         let level_clone = level.clone();
         struct Void {}
         impl std::io::Write for Void {
@@ -546,7 +547,7 @@ impl<C: 'static + Display + Send> LoggerV2Async<C> {
         let colorize_clone = colorize.clone();
         let full_count = Arc::new(AtomicUsize::new(0));
         let full_count_clone = full_count.clone();
-        let level = Arc::new(AtomicUsize::new(255));
+        let level = Arc::new(AtomicU8::new(255));
         let level_clone = level.clone();
         let ex = std::io::stderr();
         let context_specific_level = Arc::new(Mutex::new(HashMap::new()));
@@ -587,7 +588,7 @@ impl<C: 'static + Display + Send> LoggerV2Async<C> {
     /// absolutely fucking NUTS (so cheap it's basically
     /// non-existent).
     pub fn set_log_level(&mut self, level: u8) {
-        self.level.store(level as usize, Ordering::Relaxed);
+        self.level.store(level, Ordering::Relaxed);
     }
 
     /// Retrieve the current global log level value
@@ -610,7 +611,7 @@ impl<C: 'static + Display + Send> LoggerV2Async<C> {
     ///
     /// Send a message with a specific log-level.
     pub fn log(&mut self, level: u8, ctx: &'static str, message: impl Into<C>) -> bool {
-        if level as usize <= self.level.load(Ordering::Relaxed) {
+        if level <= self.level.load(Ordering::Relaxed) {
             match self.log_channel.try_send((level, ctx, message.into())) {
                 Ok(()) => true,
                 Err(TrySendError::Full(_)) => {
@@ -882,7 +883,7 @@ fn logger_thread<C: Display + Send, W: std::io::Write>(
     dropped: Arc<AtomicUsize>,
     mut writer: W,
     context_specific_level: Arc<Mutex<HashMap<&'static str, u8>>>,
-    global_level: Arc<AtomicUsize>,
+    global_level: Arc<AtomicU8>,
     colorize: Arc<AtomicBool>,
 ) {
     let mut color_counter = 0;
@@ -940,10 +941,12 @@ fn logger_thread<C: Display + Send, W: std::io::Write>(
                 match lvls {
                     Ok(lvls) => {
                         if let Some(lvl) = lvls.get("logger") {
-                            if 196 <= *lvl && 196 <= global_level.load(Ordering::Relaxed) {
+                            if LOGGER_QUIT_LEVEL <= *lvl
+                                && LOGGER_QUIT_LEVEL <= global_level.load(Ordering::Relaxed)
+                            {
                                 let _ = do_write(
                                     &mut writer,
-                                    196,
+                                    LOGGER_QUIT_LEVEL,
                                     "logger",
                                     format![
                                         "Unable to receive message. Exiting logger, reason={}",
@@ -953,10 +956,10 @@ fn logger_thread<C: Display + Send, W: std::io::Write>(
                                     &mut color_counter,
                                 );
                             }
-                        } else if 196 <= global_level.load(Ordering::Relaxed) {
+                        } else if LOGGER_QUIT_LEVEL <= global_level.load(Ordering::Relaxed) {
                             let _ = do_write(
                                 &mut writer,
-                                196,
+                                LOGGER_QUIT_LEVEL,
                                 "logger",
                                 format![
                                     "Unable to receive message. Exiting logger, reason={}",
@@ -1201,7 +1204,7 @@ mod tests {
             store: store.clone(),
         };
         let mut logger = Logger::<Log>::spawn_with_writer(writer);
-        logger.set_log_level(196);
+        logger.set_log_level(LOGGER_QUIT_LEVEL);
         let regex = Regex::new(
             r"^(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec) \d{1,2} \d+ \d{2}:\d{2}:\d{2}.\d{9}(\+|-)\d{4}: 196 logger: Unable to receive message. Exiting logger, reason=receiving on an empty and disconnected channel\n$",
         )
@@ -1229,7 +1232,7 @@ mod tests {
             store: store.clone(),
         };
         let mut logger = Logger::<Log>::spawn_with_writer(writer);
-        logger.set_log_level(196);
+        logger.set_log_level(LOGGER_QUIT_LEVEL);
         logger.set_context_specific_log_level("logger", 195);
         let regex = Regex::new(r"^$").unwrap();
         std::mem::drop(logger);
