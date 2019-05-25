@@ -1451,6 +1451,12 @@ mod tests {
         assert_eq!["ffffff80", format!["{}", InHex(&!127u32)]];
     }
 
+    #[test]
+    fn logpass() {
+        let mut logger = Logger::<Log>::spawn().to_logpass();
+        info![logger, "tst", "Message"];
+    }
+
     // ---
 
     #[bench]
