@@ -206,10 +206,18 @@
 //!     info![logger, "context", "Message {}", "More"; "key" => InDebug(&my_struct)];
 //! }
 //! ```
+#![deny(
+    missing_docs,
+    trivial_casts,
+    trivial_numeric_casts,
+    unsafe_code,
+    unused_import_braces,
+    unused_qualifications
+)]
 #![feature(test)]
 extern crate test;
 
-pub mod log;
+mod log;
 
 pub use log::*;
 
@@ -280,6 +288,7 @@ pub struct Logpass {
 }
 
 impl Logpass {
+    /// Logging function for the logpass
     pub fn log(&mut self, level: u8, ctx: &'static str, message: Generic) -> bool {
         self.passthrough.log_generic(level, ctx, message)
     }
@@ -515,7 +524,7 @@ impl<C: 'static + Display + Send> LoggerV2Async<C> {
 
     /// Retrieve the current global log level value
     pub fn get_log_level(&self) -> u8 {
-        self.level.load(Ordering::Relaxed) as u8
+        self.level.load(Ordering::Relaxed)
     }
 
     /// Sets the log level for a specific context
@@ -595,6 +604,10 @@ impl<C: 'static + Display + Send> LoggerV2Async<C> {
 }
 
 impl<C: 'static + Display + Send + From<String>> LoggerV2Async<C> {
+    /// Create a writer proxy for this logger
+    ///
+    /// Can be used to de-couple the logger dependency by passing aroung a writer instead of this
+    /// logger.
     pub fn make_writer(&mut self, ctx: &'static str, level: u8) -> impl std::fmt::Write + '_ {
         struct Writer<'a, C: Display + Send + From<String>> {
             logger: &'a mut Logger<C>,
@@ -626,7 +639,7 @@ fn count_digits_base_10(mut number: usize) -> usize {
     digits
 }
 
-fn colorize_level(level: u8) -> colored::ColoredString {
+fn colorize_level(level: u8) -> ColoredString {
     if level < 64 {
         format!["{:03}", level].red()
     } else if level < 128 {
@@ -921,14 +934,16 @@ fn logger_thread<C: Display + Send, W: std::io::Write>(
 
 // ---
 
+/// Print the value of the key-value pair as debug
 pub struct InDebug<'a, T: Debug>(pub &'a T);
 
 impl<'a, T: Debug> Display for InDebug<'a, T> {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        ((self.0) as &Debug).fmt(f)
+        self.0.fmt(f)
     }
 }
 
+/// Print the value of the key-value pair as debug-pretty
 pub struct InDebugPretty<'a, T: Debug>(pub &'a T);
 
 impl<'a, T: Debug> Display for InDebugPretty<'a, T> {
@@ -937,11 +952,12 @@ impl<'a, T: Debug> Display for InDebugPretty<'a, T> {
     }
 }
 
+/// Print the value of the key-value pair as hexadecimal
 pub struct InHex<'a, T: LowerHex>(pub &'a T);
 
 impl<'a, T: LowerHex> Display for InHex<'a, T> {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        ((self.0) as &LowerHex).fmt(f)
+        self.0.fmt(f)
     }
 }
 
@@ -971,7 +987,7 @@ mod tests {
         };
         let mut logger = Logger::<Log>::spawn_with_writer(writer);
         delegate(&mut logger);
-        std::mem::drop(logger);
+        drop(logger);
         let string = String::from_utf8(store.lock().unwrap().to_vec()).unwrap();
         string.lines().map(remove_time).collect()
     }
@@ -1041,7 +1057,7 @@ mod tests {
         assert_eq![true, logger.info("tst", "Message")];
         let mut writer = logger.make_writer("tst*", 128);
         write![writer, "Message 2"].unwrap();
-        std::mem::drop(writer);
+        drop(writer);
     }
 
     #[test]
@@ -1115,7 +1131,7 @@ mod tests {
             r"^(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec) \d{1,2} \d+ \d{2}:\d{2}:\d{2}.\d{9}(\+|-)\d{4}: 000 tst: Message\n",
         )
         .unwrap();
-        std::mem::drop(logger);
+        drop(logger);
         assert![regex.is_match(&String::from_utf8(store.lock().unwrap().to_vec()).unwrap())];
     }
 
@@ -1131,7 +1147,7 @@ mod tests {
             r"^(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec) \d{1,2} \d+ \d{2}:\d{2}:\d{2}.\d{9}(\+|-)\d{4}: 196 logger: Unable to receive message. Exiting logger, reason=receiving on an empty and disconnected channel\n$",
         )
         .unwrap();
-        std::mem::drop(logger);
+        drop(logger);
         assert![regex.is_match(&String::from_utf8(store.lock().unwrap().to_vec()).unwrap())];
     }
 
@@ -1143,7 +1159,7 @@ mod tests {
         };
         let logger = Logger::<Log>::spawn_with_writer(writer);
         let regex = Regex::new(r"^$").unwrap();
-        std::mem::drop(logger);
+        drop(logger);
         assert![regex.is_match(&String::from_utf8(store.lock().unwrap().to_vec()).unwrap())];
     }
 
@@ -1157,7 +1173,7 @@ mod tests {
         logger.set_log_level(LOGGER_QUIT_LEVEL);
         logger.set_context_specific_log_level("logger", 195);
         let regex = Regex::new(r"^$").unwrap();
-        std::mem::drop(logger);
+        drop(logger);
         assert![regex.is_match(&String::from_utf8(store.lock().unwrap().to_vec()).unwrap())];
     }
 
@@ -1185,7 +1201,7 @@ mod tests {
 (Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec) \d{1,2} \d+ \d{2}:\d{2}:\d{2}.\d{9}(\+|-)\d{4}: 000 tst \[2/2\]: \n",
         )
         .unwrap();
-        std::mem::drop(logger);
+        drop(logger);
         assert![
             regex.is_match(&String::from_utf8(store.lock().unwrap().to_vec()).unwrap()),
             String::from_utf8(store.lock().unwrap().to_vec()).unwrap()
@@ -1225,7 +1241,7 @@ mod tests {
             r#"^(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec) \d{1,2} \d+ \d{2}:\d{2}:\d{2}.\d{9}(\+|-)\d{4}: 000 tst \[1/3\]: Message\n(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec) \d{1,2} \d+ \d{2}:\d{2}:\d{2}.\d{9}(\+|-)\d{4}: 000 tst \[2/3\]: Part\n(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec) \d{1,2} \d+ \d{2}:\d{2}:\d{2}.\d{9}(\+|-)\d{4}: 000 tst \[3/3\]: 2\n"#,
         )
         .unwrap();
-        std::mem::drop(logger);
+        drop(logger);
         assert![
             regex.is_match(&String::from_utf8(store.lock().unwrap().to_vec()).unwrap()),
             String::from_utf8(store.lock().unwrap().to_vec()).unwrap()
@@ -1244,7 +1260,7 @@ mod tests {
             r#"^(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec) \d{1,2} \d+ \d{2}:\d{2}:\d{2}.\d{9}(\+|-)\d{4}: 000 tst \[1/4\]: Message\n(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec) \d{1,2} \d+ \d{2}:\d{2}:\d{2}.\d{9}(\+|-)\d{4}: 000 tst \[2/4\]: Part\n(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec) \d{1,2} \d+ \d{2}:\d{2}:\d{2}.\d{9}(\+|-)\d{4}: 000 tst \[3/4\]: 2\n(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec) \d{1,2} \d+ \d{2}:\d{2}:\d{2}.\d{9}(\+|-)\d{4}: 000 tst \[4/4\]: \n"#,
         )
         .unwrap();
-        std::mem::drop(logger);
+        drop(logger);
         assert![
             regex.is_match(&String::from_utf8(store.lock().unwrap().to_vec()).unwrap()),
             String::from_utf8(store.lock().unwrap().to_vec()).unwrap()
@@ -1409,7 +1425,7 @@ mod tests {
         let mut logger = Logger::<Log>::spawn();
         #[derive(Clone)]
         struct Value {}
-        impl std::fmt::Debug for Value {
+        impl Debug for Value {
             fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
                 write![f, "Debug Value"]
             }
@@ -1430,7 +1446,7 @@ mod tests {
 
         info![logger, "tst", "Message"; "value" => InHex(&!127u32)];
 
-        std::mem::drop(logger);
+        drop(logger);
         assert_eq![
             "128 tst: Message, value=ffffff80",
             remove_time(&String::from_utf8(store.lock().unwrap().to_vec()).unwrap()),
