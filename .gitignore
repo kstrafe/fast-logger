@@ -2,5 +2,6 @@
 !.gitignore
 !.travis.yml
 !Cargo.toml
+!README.md
 !lib.rs
 !log.rs

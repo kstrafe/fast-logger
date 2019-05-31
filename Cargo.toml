@@ -1,8 +1,13 @@
 [package]
 name = "fast-logger"
-version = "0.0.0"
+version = "0.1.0"
 authors = ["Erlend Hofstad Langseth <3rlendhl@gmail.com>", "Kevin Robert Stravers <macocio@gmail.com>"]
 edition = "2018"
+description = "Fast logger for Rust"
+homepage = "https://github.com/BourgondAries/fast-logger"
+repository = "https://github.com/BourgondAries/fast-logger"
+keywords = ["log", "logger", "logging"]
+license = "LGPL-3.0-or-later"
 
 [lib]
 name = "fast_logger"

@@ -10,6 +10,12 @@
 //! reason for this is that it cuts down on serialization cost for the caller, leaving the logger
 //! to serialize numbers into strings and perform other formatting work.
 //!
+//! # Compatibility mode #
+//!
+//! There are many loggers out there in the wild, and different libraries may use different loggers. To allow
+//! program developers to log from different sources without agreeing on a logger to use, one can
+//! interface with [Compatibility]. Logging macros work with [Compatibility].
+//!
 //! # Log Levels #
 //!
 //! Logger features two log level controls: per-context and "global". When logging a message, the
@@ -247,12 +253,13 @@ use std::{
 /// fn main() {
 ///     let mut logger = Logger::<Generic>::spawn();
 ///
+///     type MyCompatibility = Box<dyn FnMut(u8, &'static str, Box<dyn Fn(&mut std::fmt::Formatter) -> std::fmt::Result + Send + Sync>)>;
 ///     struct MyLibrary {
 ///         log: Logpass,
 ///     }
 ///
 ///     impl MyLibrary {
-///         pub fn new(log: Compatibility) -> Self {
+///         pub fn new(log: MyCompatibility) -> Self {
 ///             Self {
 ///                 log: Logpass::from_compatibility(log),
 ///             }
