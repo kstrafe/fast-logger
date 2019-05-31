@@ -235,6 +235,39 @@ use std::{
     thread::{self, JoinHandle},
 };
 
+/// Compatibility type when using loggers across library boundaries
+/// # Example #
+/// Here, the host as well as `MyLibrary` can both use any logger they wish as they are decoupled
+/// with respect to their loggers. The only bridge between them is the [Compatibility] type.
+///
+/// This is especially useful so a library can expose the compatibility type, while hosts of that
+/// library can pick and choose which logger to connect to it.
+/// ```
+/// use logger::*;
+/// fn main() {
+///     let mut logger = Logger::<Generic>::spawn();
+///
+///     struct MyLibrary {
+///         log: Logpass,
+///     }
+///
+///     impl MyLibrary {
+///         pub fn new(log: Compatibility) -> Self {
+///             Self {
+///                 log: Logpass::from_compatibility(log),
+///             }
+///         }
+///         pub fn function(&mut self) {
+///             info![self.log, "tst", "Compatibility layer"];
+///         }
+///     }
+///
+///     let mut my_lib = MyLibrary::new(logger.to_compatibility());
+///     my_lib.function();
+/// }
+/// ```
+pub type Compatibility =
+    Box<FnMut(u8, &'static str, Box<Fn(&mut fmt::Formatter) -> fmt::Result + Send + Sync>)>;
 /// The logger which dependent crates should use
 pub type Logger<C> = LoggerV2Async<C>;
 
@@ -261,19 +294,30 @@ pub struct LoggerV2Async<C: Display + Send> {
 /// Trait for a generic logger, allows [Logpass] to pass [Generic] to this logger
 pub trait GenericLogger {
     /// Log a generic message, used by [Logpass]
-    fn log_generic(&mut self, level: u8, ctx: &'static str, message: Generic) -> bool;
+    fn log_generic(&mut self, level: u8, ctx: &'static str, message: Generic);
     /// Consume this logger to create a logpass
     fn to_logpass(self) -> Logpass;
+    /// Turn the logger into a function that takes messages
+    ///
+    /// Useful when crossing boundaries into libraries that only take this `compatibility` type.
+    /// The type only refers to globally accessible types, so it can be used everywhere without
+    /// introducing dependencies.
+    ///
+    /// See [Compatibility] for examples.
+    fn to_compatibility(self) -> Compatibility;
 }
 
 impl<C: 'static + Display + From<Generic> + Send> GenericLogger for LoggerV2Async<C> {
-    fn log_generic(&mut self, level: u8, ctx: &'static str, message: Generic) -> bool {
-        self.log(level, ctx, message)
+    fn log_generic(&mut self, level: u8, ctx: &'static str, message: Generic) {
+        self.log(level, ctx, message);
     }
     fn to_logpass(self) -> Logpass {
-        Logpass {
-            passthrough: Box::new(self),
-        }
+        Logpass::PassThrough(Box::new(self))
+    }
+    fn to_compatibility(mut self) -> Compatibility {
+        Box::new(move |level, ctx, writer| {
+            self.log_generic(level, ctx, Generic(Arc::new(writer)));
+        })
     }
 }
 
@@ -283,14 +327,30 @@ impl<C: 'static + Display + From<Generic> + Send> GenericLogger for LoggerV2Asyn
 ///
 /// This structure holds a reference to another logger and passes all messages along, the messages
 /// can only be of the type [Generic].
-pub struct Logpass {
-    passthrough: Box<dyn GenericLogger>,
+pub enum Logpass {
+    /// Compatibility layer case, when using a Logpass in a library so you can, see
+    /// [GenericLogger::to_compatibility].
+    Compatibility(Compatibility),
+    /// Simple passthrough layer, used with [GenericLogger::to_logpass] to decouple print type
+    /// dependencies.
+    PassThrough(Box<dyn GenericLogger>),
 }
 
 impl Logpass {
     /// Logging function for the logpass
-    pub fn log(&mut self, level: u8, ctx: &'static str, message: Generic) -> bool {
-        self.passthrough.log_generic(level, ctx, message)
+    pub fn log(&mut self, level: u8, ctx: &'static str, message: Generic) {
+        match self {
+            Logpass::Compatibility(compat) => {
+                (compat)(level, ctx, Box::new(move |f| write![f, "{}", message]))
+            }
+            Logpass::PassThrough(passthrough) => passthrough.log_generic(level, ctx, message),
+        }
+    }
+    /// Turn a compatibility function into a [Logpass]
+    ///
+    /// See [Compatibility] for examples.
+    pub fn from_compatibility(compatibility: Compatibility) -> Self {
+        Logpass::Compatibility(compatibility)
     }
 }
 
@@ -1471,6 +1531,27 @@ mod tests {
     fn logpass() {
         let mut logger = Logger::<Log>::spawn().to_logpass();
         info![logger, "tst", "Message"];
+    }
+
+    #[test]
+    fn compatibility_layer() {
+        let mut logger = Logger::<Log>::spawn();
+        struct MyLibrary {
+            log: Logpass,
+        }
+        impl MyLibrary {
+            pub fn new(log: Compatibility) -> Self {
+                Self {
+                    log: Logpass::from_compatibility(log),
+                }
+            }
+            pub fn function(&mut self) {
+                info![self.log, "tst", "Compatibility layer"];
+            }
+        }
+
+        let mut my_lib = MyLibrary::new(logger.to_compatibility());
+        my_lib.function();
     }
 
     // ---

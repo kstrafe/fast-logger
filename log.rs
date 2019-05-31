@@ -1,4 +1,4 @@
-/// Equivalent to logging to the [log] function with an appropriate level, context, and a
+/// Equivalent to logging to the [crate::LoggerV2Async::log] function with an appropriate level, context, and a
 /// [Generic].
 #[macro_export]
 macro_rules! log {
