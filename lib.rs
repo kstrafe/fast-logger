@@ -35,7 +35,7 @@
 //! generic logging depending on your needs:
 //!
 //! ```
-//! use logger::{info, Generic, Logger};
+//! use fast_logger::{info, Generic, Logger};
 //!
 //! fn main() {
 //!     let mut logger = Logger::<Generic>::spawn();
@@ -46,7 +46,7 @@
 //!
 //! If you wish to mix this with static logging, you can do the following:
 //! ```
-//! use logger::{info, Generic, Logger};
+//! use fast_logger::{info, Generic, Logger};
 //!
 //! enum MyMsg {
 //!     Static(&'static str),
@@ -82,7 +82,7 @@
 //! the logging functions.
 //!
 //! ```
-//! use logger::Logger;
+//! use fast_logger::Logger;
 //!
 //! // You need to define your own message type
 //! enum MyMessageEnum {
@@ -119,7 +119,7 @@
 //! Here is an example where we set a context specific log level.
 //!
 //! ```
-//! use logger::Logger;
+//! use fast_logger::Logger;
 //!
 //! // You need to define your own message type
 //! enum MyMessageEnum {
@@ -163,7 +163,7 @@
 //! [String] as the message type.
 //!
 //! ```
-//! use logger::Logger;
+//! use fast_logger::Logger;
 //!
 //! fn main() {
 //!     // Setup
@@ -193,7 +193,7 @@
 //! clone directive in the macros:
 //!
 //! ```
-//! use logger::{info, Generic, InDebug, Logger};
+//! use fast_logger::{info, Generic, InDebug, Logger};
 //!
 //! #[derive(Clone, Debug)]
 //! struct MyStruct();
@@ -243,7 +243,7 @@ use std::{
 /// This is especially useful so a library can expose the compatibility type, while hosts of that
 /// library can pick and choose which logger to connect to it.
 /// ```
-/// use logger::*;
+/// use fast_logger::*;
 /// fn main() {
 ///     let mut logger = Logger::<Generic>::spawn();
 ///
@@ -1535,7 +1535,7 @@ mod tests {
 
     #[test]
     fn compatibility_layer() {
-        let mut logger = Logger::<Log>::spawn();
+        let logger = Logger::<Log>::spawn();
         struct MyLibrary {
             log: Logpass,
         }

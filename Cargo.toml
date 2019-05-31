@@ -1,20 +1,20 @@
 [package]
-name = "logger"
+name = "fast-logger"
 version = "0.0.0"
 authors = ["Erlend Hofstad Langseth <3rlendhl@gmail.com>", "Kevin Robert Stravers <macocio@gmail.com>"]
 edition = "2018"
 
 [lib]
-name = "logger"
+name = "fast_logger"
 path = "lib.rs"
 
 [dependencies]
 chrono = "0.4.6"
-colored = "1.7"
-crossbeam-channel = "0.3"
+colored = "1.8"
+crossbeam-channel = "0.3.8"
 
 [dev-dependencies]
-regex = "1.1.0"
+regex = "1.1.6"
 slog = "2.4.1"
 slog-async = "2.3"
-slog-term = "2.3"
+slog-term = "2.4"
