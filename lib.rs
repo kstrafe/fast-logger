@@ -274,7 +274,7 @@ use std::{
 /// }
 /// ```
 pub type Compatibility =
-    Box<FnMut(u8, &'static str, Box<Fn(&mut fmt::Formatter) -> fmt::Result + Send + Sync>)>;
+    Box<dyn FnMut(u8, &'static str, Box<dyn Fn(&mut fmt::Formatter) -> fmt::Result + Send + Sync>)>;
 /// The logger which dependent crates should use
 pub type Logger<C> = LoggerV2Async<C>;
 
