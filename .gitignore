@@ -1,5 +1,6 @@
 /*
 !.gitignore
+!.travis.yml
 !Cargo.toml
 !lib.rs
 !log.rs
