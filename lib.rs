@@ -18,7 +18,8 @@
 //!
 //! # Log Levels #
 //!
-//! Logger features two log level controls: per-context and "global". When logging a message, the
+//! Logger features two log level controls: per-context and "global" (Note: The logger has no
+//! globals, everything is local to the logger object). When logging a message, the
 //! global log level is checked, and if the current message has a lower priority than the global
 //! log level, nothing will be sent to the logger.
 //!
