@@ -79,7 +79,7 @@
 //!
 //! Here is an example of static-logging only, the macros do not work for this, as these generate
 //! a [Generic]. Anything implementing [Into] for the type of the logger will be accepted into
-//! the logging functions.
+//! the logging functions. This is the fast way to log, as no [Box] is used.
 //!
 //! ```
 //! use fast_logger::Logger;
