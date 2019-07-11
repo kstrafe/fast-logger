@@ -606,10 +606,17 @@ impl<C: 'static + Display + Send> LoggerV2Async<C> {
         }
     }
 
-    /// Generic logging function
-    ///
-    /// Send a message with a specific log-level.
-    pub fn log(&mut self, level: u8, ctx: &'static str, message: impl Into<C>) -> bool {
+    /// Enable colorizing log output
+    pub fn set_colorize(&mut self, on: bool) {
+        self.colorize.store(on, Ordering::Relaxed);
+    }
+
+    /// Check the current colorization status
+    pub fn get_colorize(&mut self) -> bool {
+        self.colorize.load(Ordering::Relaxed)
+    }
+
+    fn log_internal(&mut self, level: u8, ctx: &'static str, message: impl Into<C>) -> bool {
         if level <= self.level.load(Ordering::Relaxed) {
             match self.log_channel.try_send((level, ctx, message.into())) {
                 Ok(()) => true,
@@ -622,6 +629,62 @@ impl<C: 'static + Display + Send> LoggerV2Async<C> {
         } else {
             false
         }
+    }
+}
+
+#[cfg(not(test))]
+impl<C: 'static + Display + Send> LoggerV2Async<C> {
+    /// Generic logging function
+    ///
+    /// Send a message with a specific log-level.
+    pub fn log(&mut self, level: u8, ctx: &'static str, message: impl Into<C>) {
+        self.log_internal(level, ctx, message);
+    }
+
+    /// Log an error message (level 255)
+    ///
+    /// Does nothing when compiled without debug assertions
+    #[cfg(not(debug_assertions))]
+    pub fn trace(&mut self, _: &'static str, _: impl Into<C>) {
+        false
+    }
+
+    /// Log an error message (level 255)
+    ///
+    /// Does nothing when compiled without debug assertions
+    #[cfg(debug_assertions)]
+    pub fn trace(&mut self, ctx: &'static str, message: impl Into<C>) {
+        self.log(255, ctx, message)
+    }
+
+    /// Log an error message (level 192)
+    pub fn debug(&mut self, ctx: &'static str, message: impl Into<C>) {
+        self.log(192, ctx, message)
+    }
+
+    /// Log an error message (level 128)
+    pub fn info(&mut self, ctx: &'static str, message: impl Into<C>) {
+        self.log(128, ctx, message)
+    }
+
+    /// Log an error message (level 64)
+    pub fn warn(&mut self, ctx: &'static str, message: impl Into<C>) {
+        self.log(64, ctx, message)
+    }
+
+    /// Log an error message (level 0)
+    pub fn error(&mut self, ctx: &'static str, message: impl Into<C>) {
+        self.log(0, ctx, message)
+    }
+}
+
+#[cfg(test)]
+impl<C: 'static + Display + Send> LoggerV2Async<C> {
+    /// Generic logging function
+    ///
+    /// Send a message with a specific log-level.
+    pub fn log(&mut self, level: u8, ctx: &'static str, message: impl Into<C>) -> bool {
+        self.log_internal(level, ctx, message)
     }
 
     /// Log an error message (level 255)
@@ -658,16 +721,6 @@ impl<C: 'static + Display + Send> LoggerV2Async<C> {
     /// Log an error message (level 0)
     pub fn error(&mut self, ctx: &'static str, message: impl Into<C>) -> bool {
         self.log(0, ctx, message)
-    }
-
-    /// Enable colorizing log output
-    pub fn set_colorize(&mut self, on: bool) {
-        self.colorize.store(on, Ordering::Relaxed);
-    }
-
-    /// Check the current colorization status
-    pub fn get_colorize(&mut self) -> bool {
-        self.colorize.load(Ordering::Relaxed)
     }
 }
 
