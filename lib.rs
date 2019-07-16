@@ -645,9 +645,7 @@ impl<C: 'static + Display + Send> LoggerV2Async<C> {
     ///
     /// Does nothing when compiled without debug assertions
     #[cfg(not(debug_assertions))]
-    pub fn trace(&mut self, _: &'static str, _: impl Into<C>) {
-        false
-    }
+    pub fn trace(&mut self, _: &'static str, _: impl Into<C>) {}
 
     /// Log an error message (level 255)
     ///
