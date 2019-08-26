@@ -290,7 +290,7 @@ pub type Logger<C> = LoggerV2Async<C>;
 pub struct LoggerV2Async<C: Display + Send> {
     // Explicitly first so it's the first to drop
     log_channel: Sender<(u8, &'static str, C)>,
-    context_specific_level: Arc<Mutex<HashMap<&'static str, u8>>>,
+    context_specific_level: Arc<Mutex<HashMap<String, u8>>>,
     level: Arc<AtomicU8>,
     log_channel_full_count: Arc<AtomicUsize>,
     thread_handle: Arc<AutoJoinHandle>,
@@ -587,7 +587,7 @@ impl<C: 'static + Display + Send> LoggerV2Async<C> {
     /// Clone the logger but change the context of the clone
     pub fn clone_with_context(&self, ctx: &'static str) -> Self {
         if let Ok(ref mut lvl) = self.context_specific_level.lock() {
-            lvl.insert(ctx, DEFAULT_LEVEL);
+            lvl.insert(ctx.to_string(), DEFAULT_LEVEL);
         }
         Logger {
             thread_handle: self.thread_handle.clone(),
@@ -624,7 +624,7 @@ impl<C: 'static + Display + Send> LoggerV2Async<C> {
     /// Whenever the logger receives a message, it will use the context-to-level
     /// mapping to see if the message should be logged or not.
     /// Note that this happens after checking the global log level.
-    pub fn set_context_specific_log_level(&mut self, ctx: &'static str, level: u8) -> bool {
+    pub fn set_context_specific_log_level(&mut self, ctx: &str, level: u8) -> bool {
         if let Ok(ref mut lvl) = self.context_specific_level.lock() {
             if let Some(stored_level) = lvl.get_mut(ctx) {
                 *stored_level = level;
@@ -780,11 +780,11 @@ impl<C: 'static + Display + Send + From<String>> LoggerV2Async<C> {
 
 fn create_context_specific_log_level(
     ctx: Option<&'static str>,
-) -> Arc<Mutex<HashMap<&'static str, u8>>> {
+) -> Arc<Mutex<HashMap<String, u8>>> {
     let mut map = HashMap::new();
-    map.insert("logger", LOGGER_QUIT_LEVEL);
+    map.insert("logger".to_string(), LOGGER_QUIT_LEVEL);
     if let Some(string) = ctx {
-        map.insert(string, DEFAULT_LEVEL);
+        map.insert(string.to_string(), DEFAULT_LEVEL);
     }
     Arc::new(Mutex::new(map))
 }
@@ -976,7 +976,7 @@ fn logger_thread<C: Display + Send, W: std::io::Write>(
     rx: Receiver<(u8, &'static str, C)>,
     dropped: Arc<AtomicUsize>,
     mut writer: W,
-    context_specific_level: Arc<Mutex<HashMap<&'static str, u8>>>,
+    context_specific_level: Arc<Mutex<HashMap<String, u8>>>,
     global_level: Arc<AtomicU8>,
     colorize: Arc<AtomicBool>,
 ) {
