@@ -148,7 +148,7 @@
 //!
 //!     // Set the log level of `ctx` to 70, this filters
 //!     // All future log levels 71-255 out.
-//!     logger.set_context_specific_log_level("ctx", 70);
+//!     assert![logger.set_context_specific_log_level("ctx", 70)];
 //!
 //!     // This gets printed, because `warn` logs at level 64 <= 70
 //!     logger.warn(MyMessageEnum::SimpleMessage("1"));
@@ -178,7 +178,7 @@
 //!
 //!     // Set the log level of `ctx` to 70, this filters
 //!     // All future log levels 71-255 out.
-//!     logger.set_context_specific_log_level("ctx", 70);
+//!     assert![logger.set_context_specific_log_level("ctx", 70)];
 //!
 //!     // This gets printed, because `warn` logs at level 64 <= 70
 //!     logger.warn(format!("1"));
@@ -423,7 +423,7 @@ impl<C: 'static + Display + Send> LoggerV2Async<C> {
         let level = Arc::new(AtomicU8::new(DEFAULT_LEVEL));
         let level_clone = level.clone();
         let ex = std::io::stdout();
-        let context_specific_level = Arc::new(Mutex::new(HashMap::new()));
+        let context_specific_level = create_context_specific_log_level(Some(ctx));
         let context_specific_level_clone = context_specific_level.clone();
         let logger_thread = thread::Builder::new()
             .name("logger".to_string())
@@ -466,7 +466,7 @@ impl<C: 'static + Display + Send> LoggerV2Async<C> {
         let full_count_clone = full_count.clone();
         let level = Arc::new(AtomicU8::new(DEFAULT_LEVEL));
         let level_clone = level.clone();
-        let context_specific_level = Arc::new(Mutex::new(HashMap::new()));
+        let context_specific_level = create_context_specific_log_level(Some(ctx));
         let context_specific_level_clone = context_specific_level.clone();
         let logger_thread = thread::Builder::new()
             .name("logger".to_string())
@@ -515,7 +515,7 @@ impl<C: 'static + Display + Send> LoggerV2Async<C> {
                 Ok(())
             }
         }
-        let context_specific_level = Arc::new(Mutex::new(HashMap::new()));
+        let context_specific_level = create_context_specific_log_level(None);
         let context_specific_level_clone = context_specific_level.clone();
         let logger_thread = thread::Builder::new()
             .name("logger".to_string())
@@ -556,7 +556,7 @@ impl<C: 'static + Display + Send> LoggerV2Async<C> {
         let level = Arc::new(AtomicU8::new(255));
         let level_clone = level.clone();
         let ex = std::io::stderr();
-        let context_specific_level = Arc::new(Mutex::new(HashMap::new()));
+        let context_specific_level = create_context_specific_log_level(None);
         let context_specific_level_clone = context_specific_level.clone();
         let logger_thread = thread::Builder::new()
             .name("logger".to_string())
@@ -586,6 +586,9 @@ impl<C: 'static + Display + Send> LoggerV2Async<C> {
 
     /// Clone the logger but change the context of the clone
     pub fn clone_with_context(&self, ctx: &'static str) -> Self {
+        if let Ok(ref mut lvl) = self.context_specific_level.lock() {
+            lvl.insert(ctx, DEFAULT_LEVEL);
+        }
         Logger {
             thread_handle: self.thread_handle.clone(),
             log_channel: self.log_channel.clone(),
@@ -621,10 +624,14 @@ impl<C: 'static + Display + Send> LoggerV2Async<C> {
     /// Whenever the logger receives a message, it will use the context-to-level
     /// mapping to see if the message should be logged or not.
     /// Note that this happens after checking the global log level.
-    pub fn set_context_specific_log_level(&mut self, ctx: &'static str, level: u8) {
+    pub fn set_context_specific_log_level(&mut self, ctx: &'static str, level: u8) -> bool {
         if let Ok(ref mut lvl) = self.context_specific_level.lock() {
-            lvl.insert(ctx, level);
+            if let Some(stored_level) = lvl.get_mut(ctx) {
+                *stored_level = level;
+                return true;
+            }
         }
+        false
     }
 
     /// Enable colorizing log output
@@ -770,6 +777,17 @@ impl<C: 'static + Display + Send + From<String>> LoggerV2Async<C> {
 }
 
 // ---
+
+fn create_context_specific_log_level(
+    ctx: Option<&'static str>,
+) -> Arc<Mutex<HashMap<&'static str, u8>>> {
+    let mut map = HashMap::new();
+    map.insert("logger", LOGGER_QUIT_LEVEL);
+    if let Some(string) = ctx {
+        map.insert(string, DEFAULT_LEVEL);
+    }
+    Arc::new(Mutex::new(map))
+}
 
 fn count_digits_base_10(mut number: usize) -> usize {
     let mut digits = 1;
@@ -1312,7 +1330,7 @@ mod tests {
         };
         let mut logger = Logger::<Log>::spawn_with_writer("tst", writer);
         logger.set_log_level(LOGGER_QUIT_LEVEL);
-        logger.set_context_specific_log_level("logger", 195);
+        assert![logger.set_context_specific_log_level("logger", 195)];
         let regex = Regex::new(r"^$").unwrap();
         drop(logger);
         assert![regex.is_match(&String::from_utf8(store.lock().unwrap().to_vec()).unwrap())];
@@ -1358,17 +1376,16 @@ mod tests {
             warn![lgr.clone_with_context("warning"), "Message 4"];
             error![lgr.clone_with_context("erroring"), "Message 5"];
             log![123, lgr.clone_with_context("logging"), "Message 6"];
+            assert![!lgr.set_context_specific_log_level("overdebug", 191)];
             log![
                 191,
                 lgr.clone_with_context("overdebug"),
                 "This gets filtered"
             ];
             lgr.set_log_level(191);
-            log![
-                191,
-                lgr.clone_with_context("overdebug"),
-                "Just above debugging worked"
-            ];
+            let mut overdebug = lgr.clone_with_context("overdebug");
+            assert![lgr.set_context_specific_log_level("overdebug", 191)];
+            log![191, overdebug, "Just above debugging worked"];
         });
         assert_eq![5, lines.len()];
         assert_eq!["128 infoing: Message 3", lines[0]];
