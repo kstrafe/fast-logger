@@ -213,6 +213,21 @@
 //!     info![logger, "Message {}", "More"; "key" => InDebug(&my_struct)];
 //! }
 //! ```
+//!
+//! # Nested Logging #
+//!
+//! It is sometimes useful to nest logging contexts, here's how to do that:
+//!
+//! ```
+//! use fast_logger::{info, Generic, Logger};
+//!
+//! fn main() {
+//!     let logger = Logger::<Generic>::spawn("context");
+//!     let submodule = logger.clone_add_context("submodule");
+//!     let mut something = submodule.clone_add_context("something");
+//!     info![something, "This message appears in the context: context-submodule-something"];
+//! }
+//! ```
 #![deny(
     missing_docs,
     trivial_casts,
