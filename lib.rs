@@ -225,8 +225,10 @@
 extern crate test;
 
 mod log;
+mod u32map;
 
 pub use log::*;
+use u32map::*;
 
 use chrono::prelude::*;
 use colored::*;
@@ -289,13 +291,14 @@ pub type Logger<C> = LoggerV2Async<C>;
 #[derive(Clone)]
 pub struct LoggerV2Async<C: Display + Send> {
     // Explicitly first so it's the first to drop
-    log_channel: Sender<(u8, &'static str, C)>,
+    log_channel: Sender<(u8, u32, C)>,
     context_specific_level: Arc<Mutex<HashMap<String, u8>>>,
     level: Arc<AtomicU8>,
     log_channel_full_count: Arc<AtomicUsize>,
     thread_handle: Arc<AutoJoinHandle>,
     colorize: Arc<AtomicBool>,
-    context: &'static str,
+    context_map: Arc<Mutex<U32Map<String>>>,
+    context: u32,
 }
 
 // ---
@@ -425,6 +428,8 @@ impl<C: 'static + Display + Send> LoggerV2Async<C> {
         let ex = std::io::stdout();
         let context_specific_level = create_context_specific_log_level(Some(ctx));
         let context_specific_level_clone = context_specific_level.clone();
+        let context_map = create_context_map(Some(ctx));
+        let context_map_clone = context_map.clone();
         let logger_thread = thread::Builder::new()
             .name("logger".to_string())
             .spawn(move || {
@@ -435,6 +440,7 @@ impl<C: 'static + Display + Send> LoggerV2Async<C> {
                     context_specific_level_clone,
                     level_clone,
                     colorize_clone,
+                    context_map,
                 )
             })
             .unwrap();
@@ -447,7 +453,8 @@ impl<C: 'static + Display + Send> LoggerV2Async<C> {
             level,
             context_specific_level,
             colorize,
-            context: ctx,
+            context_map: context_map_clone,
+            context: 1,
         }
     }
 
@@ -468,6 +475,8 @@ impl<C: 'static + Display + Send> LoggerV2Async<C> {
         let level_clone = level.clone();
         let context_specific_level = create_context_specific_log_level(Some(ctx));
         let context_specific_level_clone = context_specific_level.clone();
+        let context_map = create_context_map(Some(ctx));
+        let context_map_clone = context_map.clone();
         let logger_thread = thread::Builder::new()
             .name("logger".to_string())
             .spawn(move || {
@@ -478,6 +487,7 @@ impl<C: 'static + Display + Send> LoggerV2Async<C> {
                     context_specific_level_clone,
                     level_clone,
                     colorize_clone,
+                    context_map,
                 )
             })
             .unwrap();
@@ -490,7 +500,8 @@ impl<C: 'static + Display + Send> LoggerV2Async<C> {
             level,
             context_specific_level,
             colorize,
-            context: ctx,
+            context_map: context_map_clone,
+            context: 1,
         }
     }
 
@@ -515,8 +526,12 @@ impl<C: 'static + Display + Send> LoggerV2Async<C> {
                 Ok(())
             }
         }
-        let context_specific_level = create_context_specific_log_level(None);
+        let context_specific_level = create_context_specific_log_level(Some("void"));
         let context_specific_level_clone = context_specific_level.clone();
+
+        let context_map = create_context_map(Some("void"));
+        let context_map_clone = context_map.clone();
+
         let logger_thread = thread::Builder::new()
             .name("logger".to_string())
             .spawn(move || {
@@ -527,6 +542,7 @@ impl<C: 'static + Display + Send> LoggerV2Async<C> {
                     context_specific_level_clone,
                     level_clone,
                     colorize_clone,
+                    context_map,
                 )
             })
             .unwrap();
@@ -539,7 +555,8 @@ impl<C: 'static + Display + Send> LoggerV2Async<C> {
             level,
             context_specific_level,
             colorize,
-            context: "void",
+            context_map: context_map_clone,
+            context: 1,
         }
     }
 
@@ -556,8 +573,10 @@ impl<C: 'static + Display + Send> LoggerV2Async<C> {
         let level = Arc::new(AtomicU8::new(255));
         let level_clone = level.clone();
         let ex = std::io::stderr();
-        let context_specific_level = create_context_specific_log_level(None);
+        let context_specific_level = create_context_specific_log_level(Some("test"));
         let context_specific_level_clone = context_specific_level.clone();
+        let context_map = create_context_map(Some("test"));
+        let context_map_clone = context_map.clone();
         let logger_thread = thread::Builder::new()
             .name("logger".to_string())
             .spawn(move || {
@@ -568,6 +587,7 @@ impl<C: 'static + Display + Send> LoggerV2Async<C> {
                     context_specific_level_clone,
                     level_clone,
                     colorize_clone,
+                    context_map,
                 )
             })
             .unwrap();
@@ -580,7 +600,8 @@ impl<C: 'static + Display + Send> LoggerV2Async<C> {
             level,
             context_specific_level,
             colorize,
-            context: "test",
+            context_map: context_map_clone,
+            context: 1,
         }
     }
 
@@ -589,6 +610,13 @@ impl<C: 'static + Display + Send> LoggerV2Async<C> {
         if let Ok(ref mut lvl) = self.context_specific_level.lock() {
             lvl.insert(ctx.to_string(), DEFAULT_LEVEL);
         }
+
+        let ctxval = if let Ok(ref mut ctxmap) = self.context_map.lock() {
+            ctxmap.insert(ctx.to_string()).expect("Context map is full")
+        } else {
+            panic![];
+        };
+
         Logger {
             thread_handle: self.thread_handle.clone(),
             log_channel: self.log_channel.clone(),
@@ -596,7 +624,35 @@ impl<C: 'static + Display + Send> LoggerV2Async<C> {
             level: self.level.clone(),
             context_specific_level: self.context_specific_level.clone(),
             colorize: self.colorize.clone(),
-            context: ctx,
+            context_map: self.context_map.clone(),
+            context: ctxval,
+        }
+    }
+
+    /// Clone the logger but append the context of the clone
+    pub fn clone_add_context(&self, ctx: &'static str) -> Self {
+        if let Ok(ref mut lvl) = self.context_specific_level.lock() {
+            lvl.insert(ctx.to_string(), DEFAULT_LEVEL);
+        }
+
+        let ctxval = if let Ok(ref mut ctxmap) = self.context_map.lock() {
+            let prev_ctx = ctxmap.get(&self.context).unwrap().clone();
+            ctxmap
+                .insert(prev_ctx + "-" + ctx)
+                .expect("Context map is full")
+        } else {
+            panic![];
+        };
+
+        Logger {
+            thread_handle: self.thread_handle.clone(),
+            log_channel: self.log_channel.clone(),
+            log_channel_full_count: self.log_channel_full_count.clone(),
+            level: self.level.clone(),
+            context_specific_level: self.context_specific_level.clone(),
+            colorize: self.colorize.clone(),
+            context_map: self.context_map.clone(),
+            context: ctxval,
         }
     }
 
@@ -778,13 +834,20 @@ impl<C: 'static + Display + Send + From<String>> LoggerV2Async<C> {
 
 // ---
 
-fn create_context_specific_log_level(
-    ctx: Option<&'static str>,
-) -> Arc<Mutex<HashMap<String, u8>>> {
+fn create_context_specific_log_level(ctx: Option<&'static str>) -> Arc<Mutex<HashMap<String, u8>>> {
     let mut map = HashMap::new();
     map.insert("logger".to_string(), LOGGER_QUIT_LEVEL);
     if let Some(string) = ctx {
         map.insert(string.to_string(), DEFAULT_LEVEL);
+    }
+    Arc::new(Mutex::new(map))
+}
+
+fn create_context_map(ctx: Option<&'static str>) -> Arc<Mutex<U32Map<String>>> {
+    let mut map = U32Map::new();
+    map.insert("logger".to_string());
+    if let Some(string) = ctx {
+        map.insert(string.to_string()).expect("Added");
     }
     Arc::new(Mutex::new(map))
 }
@@ -817,7 +880,7 @@ fn colorize_level(level: u8) -> ColoredString {
 fn do_write_nocolor<W: std::io::Write, T: Display>(
     writer: &mut W,
     lvl: u8,
-    ctx: &'static str,
+    ctx: &str,
     msg: &str,
     now: T,
     newlines: usize,
@@ -854,7 +917,7 @@ fn do_write_nocolor<W: std::io::Write, T: Display>(
 fn do_write_color<W: std::io::Write, T: Display>(
     writer: &mut W,
     lvl: u8,
-    ctx: &'static str,
+    ctx: &str,
     msg: &str,
     now: T,
     newlines: usize,
@@ -919,7 +982,7 @@ fn do_write_color<W: std::io::Write, T: Display>(
 fn do_write<C: Display + Send, W: std::io::Write>(
     writer: &mut W,
     lvl: u8,
-    ctx: &'static str,
+    ctx: &str,
     msg: C,
     colorize: bool,
     color_counter: &mut usize,
@@ -973,12 +1036,13 @@ fn do_write<C: Display + Send, W: std::io::Write>(
 }
 
 fn logger_thread<C: Display + Send, W: std::io::Write>(
-    rx: Receiver<(u8, &'static str, C)>,
+    rx: Receiver<(u8, u32, C)>,
     dropped: Arc<AtomicUsize>,
     mut writer: W,
     context_specific_level: Arc<Mutex<HashMap<String, u8>>>,
     global_level: Arc<AtomicU8>,
     colorize: Arc<AtomicBool>,
+    contexts: Arc<Mutex<U32Map<String>>>,
 ) {
     let mut color_counter = 0;
     let mut color;
@@ -986,15 +1050,31 @@ fn logger_thread<C: Display + Send, W: std::io::Write>(
         match rx.recv() {
             Ok(msg) => {
                 color = colorize.load(Ordering::Relaxed);
+                let contexts = contexts.lock();
+                let ctx = match contexts {
+                    Ok(contexts) => contexts,
+                    Err(_poison) => {
+                        let _ = do_write(
+                            &mut writer,
+                            0,
+                            "logger",
+                            "Context map lock has been poisoned. Exiting logger",
+                            color,
+                            &mut color_counter,
+                        );
+                        break 'outer_loop;
+                    }
+                };
+                let ctx = ctx.get(&msg.1).expect("Entry is not in table");
                 let lvls = context_specific_level.lock();
                 match lvls {
                     Ok(lvls) => {
-                        if let Some(lvl) = lvls.get(msg.1) {
+                        if let Some(lvl) = lvls.get(ctx) {
                             if msg.0 <= *lvl
                                 && do_write(
                                     &mut writer,
                                     msg.0,
-                                    msg.1,
+                                    ctx,
                                     msg.2,
                                     color,
                                     &mut color_counter,
@@ -1006,7 +1086,7 @@ fn logger_thread<C: Display + Send, W: std::io::Write>(
                         } else if do_write(
                             &mut writer,
                             msg.0,
-                            msg.1,
+                            ctx,
                             msg.2,
                             color,
                             &mut color_counter,
@@ -1364,6 +1444,23 @@ mod tests {
         assert![
             regex.is_match(&String::from_utf8(store.lock().unwrap().to_vec()).unwrap()),
             String::from_utf8(store.lock().unwrap().to_vec()).unwrap()
+        ];
+    }
+
+    #[test]
+    fn nested_contexts() {
+        let lines = read_messages_without_date(|lgr| {
+            let client = lgr.clone_with_context("client");
+            let mut laminar = client.clone_add_context("laminar");
+            info![laminar, "Hello world"];
+            let mut vxdraw = laminar.clone_add_context("vxdraw");
+            warn![vxdraw, "Initializing something {}", "Something"];
+        });
+        assert_eq![2, lines.len()];
+        assert_eq!["128 client-laminar: Hello world", lines[0]];
+        assert_eq![
+            "064 client-laminar-vxdraw: Initializing something Something",
+            lines[1]
         ];
     }
 
