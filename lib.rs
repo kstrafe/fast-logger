@@ -646,18 +646,19 @@ impl<C: 'static + Display + Send> LoggerV2Async<C> {
 
     /// Clone the logger but append the context of the clone
     pub fn clone_add_context(&self, ctx: &'static str) -> Self {
-        if let Ok(ref mut lvl) = self.context_specific_level.lock() {
-            lvl.insert(ctx.to_string(), DEFAULT_LEVEL);
-        }
+        let newctx;
 
         let ctxval = if let Ok(ref mut ctxmap) = self.context_map.lock() {
             let prev_ctx = ctxmap.get(&self.context).unwrap().clone();
-            ctxmap
-                .insert(prev_ctx + "-" + ctx)
-                .expect("Context map is full")
+            newctx = prev_ctx + "-" + ctx;
+            ctxmap.insert(newctx.clone()).expect("Context map is full")
         } else {
             panic![];
         };
+
+        if let Ok(ref mut lvl) = self.context_specific_level.lock() {
+            lvl.insert(newctx.to_string(), DEFAULT_LEVEL);
+        }
 
         Logger {
             thread_handle: self.thread_handle.clone(),
@@ -703,6 +704,16 @@ impl<C: 'static + Display + Send> LoggerV2Async<C> {
             }
         }
         false
+    }
+
+    /// Set the log level of this logger's associated context
+    pub fn set_this_log_level(&mut self, level: u8) {
+        let ctx = if let Ok(ref mut ctxs) = self.context_map.lock() {
+            ctxs.get(&self.context).unwrap().clone()
+        } else {
+            panic!["Unable to acquire context map lock"];
+        };
+        assert![self.set_context_specific_log_level(&ctx, level)];
     }
 
     /// Enable colorizing log output
@@ -1467,16 +1478,22 @@ mod tests {
         let lines = read_messages_without_date(|lgr| {
             let client = lgr.clone_with_context("client");
             let mut laminar = client.clone_add_context("laminar");
-            info![laminar, "Hello world"];
+            // WARNING: Racy if setting the log level after sending a message, so we use error here
+            // which guarantees arrival
+            error![laminar, "Hello world"];
             let mut vxdraw = laminar.clone_add_context("vxdraw");
             warn![vxdraw, "Initializing something {}", "Something"];
+            laminar.set_this_log_level(0);
+            warn![vxdraw, "A warning"];
+            warn![laminar, "Another warning"];
         });
-        assert_eq![2, lines.len()];
-        assert_eq!["128 client-laminar: Hello world", lines[0]];
+        assert_eq![3, lines.len()];
+        assert_eq!["000 client-laminar: Hello world", lines[0]];
         assert_eq![
             "064 client-laminar-vxdraw: Initializing something Something",
             lines[1]
         ];
+        assert_eq!["064 client-laminar-vxdraw: A warning", lines[2]];
     }
 
     #[test]
