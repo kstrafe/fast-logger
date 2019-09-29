@@ -1,6 +1,7 @@
 /*
 !.gitignore
 !.travis.yml
+!benches/
 !Cargo.toml
 !README.md
 !lib.rs

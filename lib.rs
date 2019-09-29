@@ -236,8 +236,6 @@
     unused_import_braces,
     unused_qualifications
 )]
-#![feature(test)]
-extern crate test;
 
 mod log;
 mod u32map;
@@ -1233,7 +1231,6 @@ mod tests {
     use super::*;
     use regex::Regex;
     use std::{fmt, io};
-    use test::{black_box, Bencher};
 
     // ---
 
@@ -1261,20 +1258,12 @@ mod tests {
 
     enum Log {
         Static(&'static str),
-        Complex(&'static str, f32, &'static [u8]),
         Generic(Generic),
     }
     impl Display for Log {
         fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
             match self {
                 Log::Static(str) => write![f, "{}", str],
-                Log::Complex(str, value, list) => {
-                    write![f, "{} {}", str, value]?;
-                    for i in list.iter() {
-                        write![f, "{}", i]?;
-                    }
-                    Ok(())
-                }
                 Log::Generic(generic) => generic.fmt(f),
             }
         }
@@ -1787,257 +1776,5 @@ mod tests {
 
         let mut my_lib = MyLibrary::new(logger.to_compatibility());
         my_lib.function();
-    }
-
-    // ---
-
-    #[bench]
-    fn sending_a_message_to_trace_default(b: &mut Bencher) {
-        let mut logger = Logger::<Log>::spawn("tst");
-        b.iter(|| {
-            black_box(logger.trace(black_box(Log::Static("Message"))));
-        });
-    }
-
-    #[bench]
-    fn sending_a_message_to_debug_default(b: &mut Bencher) {
-        let mut logger = Logger::<Log>::spawn("tst");
-        b.iter(|| {
-            black_box(logger.debug(black_box(Log::Static("Message"))));
-        });
-    }
-
-    #[bench]
-    fn sending_a_message_to_info_default(b: &mut Bencher) {
-        let mut logger = Logger::<Log>::spawn("tst");
-        b.iter(|| {
-            black_box(logger.info(black_box(Log::Static("Message"))));
-        });
-    }
-
-    #[bench]
-    fn sending_a_complex_message_trace(b: &mut Bencher) {
-        let mut logger = Logger::<Log>::spawn("tst");
-        b.iter(|| black_box(logger.trace(black_box(Log::Complex("Message", 3.14, &[1, 2, 3])))));
-    }
-
-    #[bench]
-    fn sending_a_complex_message_info(b: &mut Bencher) {
-        let mut logger = Logger::<Log>::spawn("tst");
-        b.iter(|| {
-            black_box(logger.info(black_box(Log::Complex("Message", 3.14, &[1, 2, 3]))));
-        });
-    }
-
-    // ---
-
-    #[bench]
-    fn custom_writer_sending_a_message_to_trace_default(b: &mut Bencher) {
-        let writer = Void {};
-        let mut logger = Logger::<Log>::spawn_with_writer("tst", writer);
-        assert![!logger.trace(Log::Static(
-            "Trace should be disabled during benchmark (due to compiler optimization)"
-        ))];
-        b.iter(|| {
-            black_box(logger.trace(black_box(Log::Static("Message"))));
-        });
-    }
-
-    #[bench]
-    fn custom_writer_sending_a_message_to_debug_default(b: &mut Bencher) {
-        let writer = Void {};
-        let mut logger = Logger::<Log>::spawn_with_writer("tst", writer);
-        assert![!logger.debug(Log::Static(
-            "Debug should be disabled during benchmark (due to the standard log level)"
-        ))];
-        b.iter(|| {
-            black_box(logger.debug(black_box(Log::Static("Message"))));
-        });
-    }
-
-    #[bench]
-    fn custom_writer_sending_a_message_to_info_default(b: &mut Bencher) {
-        let writer = Void {};
-        let mut logger = Logger::<Log>::spawn_with_writer("tst", writer);
-        b.iter(|| {
-            black_box(logger.info(black_box(Log::Static("Message"))));
-        });
-    }
-
-    #[bench]
-    fn custom_writer_sending_a_complex_message_trace(b: &mut Bencher) {
-        let writer = Void {};
-        let mut logger = Logger::<Log>::spawn_with_writer("tst", writer);
-        assert![!logger.trace(Log::Static("Trace should be disabled during benchmark"))];
-        b.iter(|| black_box(logger.trace(black_box(Log::Complex("Message", 3.14, &[1, 2, 3])))));
-    }
-
-    #[bench]
-    fn custom_writer_sending_a_complex_message_info(b: &mut Bencher) {
-        let writer = Void {};
-        let mut logger = Logger::<Log>::spawn_with_writer("tst", writer);
-        b.iter(|| {
-            black_box(logger.info(black_box(Log::Complex("Message", 3.14, &[1, 2, 3]))));
-        });
-    }
-
-    #[bench]
-    fn using_macros_to_send_message(b: &mut Bencher) {
-        let writer = Void {};
-        let mut logger = Logger::<Generic>::spawn_with_writer("tst", writer);
-        b.iter(|| {
-            black_box(info!(logger, "Message {:?}", black_box(&[1, 2, 3]); black_box("pi") => black_box(3.14)));
-        });
-    }
-
-    #[bench]
-    fn custom_writer_sending_a_complex_format_message_info(b: &mut Bencher) {
-        let writer = Void {};
-        let mut logger = Logger::<String>::spawn_with_writer("tst", writer);
-        b.iter(|| {
-            black_box(logger.info(black_box(format!["Message {} {:?}", 3.14, &[1, 2, 3]])));
-        });
-    }
-
-    #[test]
-    fn void_logger_speed_info_with_macros() {
-        // NOTE: This "benchmark" is implemented as a test because benches tend to
-        // overflow the channel
-        let writer = Void {};
-        let mut logger = Logger::<Generic>::spawn_with_writer("tst", writer);
-        let before = std::time::Instant::now();
-        for _ in 0..CHANNEL_SIZE {
-            black_box(
-                info!(logger, "Message {:?}", black_box(&[1, 2, 3]); black_box("pi") => black_box(3.14)),
-            );
-        }
-        let after = std::time::Instant::now();
-        println![
-            "void logger speed info with macros: {:?}",
-            (after - before) / (CHANNEL_SIZE as u32)
-        ];
-    }
-
-    #[test]
-    fn void_logger_speed_info_without_macros() {
-        // NOTE: This "benchmark" is implemented as a test because benches tend to
-        // overflow the channel
-        let writer = Void {};
-        let mut logger = Logger::<usize>::spawn_with_writer("tst", writer);
-        let before = std::time::Instant::now();
-        for _ in 0..CHANNEL_SIZE {
-            logger.info(black_box(12345usize));
-        }
-        let after = std::time::Instant::now();
-        println![
-            "void logger speed info: {:?}",
-            (after - before) / (CHANNEL_SIZE as u32)
-        ];
-    }
-
-    #[test]
-    fn void_logger_speed_debug() {
-        // NOTE: This "benchmark" is implemented as a test because benches tend to
-        // overflow the channel
-        let writer = Void {};
-        let mut logger = Logger::<usize>::spawn_with_writer("tst", writer);
-        let before = std::time::Instant::now();
-        for _ in 0..CHANNEL_SIZE {
-            logger.debug(black_box(12345usize));
-        }
-        let after = std::time::Instant::now();
-        println![
-            "void logger speed debug: {:?}",
-            (after - before) / (CHANNEL_SIZE as u32)
-        ];
-    }
-
-    #[test]
-    fn void_logger_speed_trace() {
-        // NOTE: This "benchmark" is implemented as a test because benches tend to
-        // overflow the channel
-        let writer = Void {};
-        let mut logger = Logger::<usize>::spawn_with_writer("tst", writer);
-        let before = std::time::Instant::now();
-        for _ in 0..CHANNEL_SIZE {
-            logger.trace(black_box(12345usize));
-        }
-        let after = std::time::Instant::now();
-        println![
-            "void logger speed trace: {:?}",
-            (after - before) / (CHANNEL_SIZE as u32)
-        ];
-    }
-
-    // ---
-
-    use slog::{o, Drain, Level, OwnedKVList, Record};
-    impl Drain for Void {
-        type Ok = ();
-        type Err = ();
-        fn log(&self, _: &Record, _: &OwnedKVList) -> Result<Self::Ok, Self::Err> {
-            Ok(())
-        }
-    }
-
-    #[bench]
-    fn message_slog_disabled_by_compiler(b: &mut Bencher) {
-        let decorator = slog_term::PlainDecorator::new(Void {});
-        let drain = slog_term::CompactFormat::new(decorator).build().fuse();
-        let drain = slog_async::Async::new(drain)
-            .chan_size(CHANNEL_SIZE)
-            .build()
-            .fuse();
-        let log = slog::Logger::root(drain, o![]);
-        assert![!log.is_trace_enabled()];
-        b.iter(|| {
-            black_box(slog::trace![log, "{}", black_box("Message")]);
-        });
-    }
-
-    #[bench]
-    fn message_slog_disabled_dynamically_on_async_side(b: &mut Bencher) {
-        let decorator = slog_term::PlainDecorator::new(Void {});
-        let drain = slog_term::CompactFormat::new(decorator).build().fuse();
-        let drain = slog::LevelFilter::new(drain, Level::Critical).fuse();
-        let drain = slog_async::Async::new(drain)
-            .chan_size(CHANNEL_SIZE)
-            .build()
-            .fuse();
-        let log = slog::Logger::root(drain, o![]);
-        assert![log.is_info_enabled()];
-        b.iter(|| {
-            black_box(slog::info![log, "{}", black_box("Message")]);
-        });
-    }
-
-    #[bench]
-    fn message_slog_disabled_dynamically_on_caller_side(b: &mut Bencher) {
-        let decorator = slog_term::PlainDecorator::new(Void {});
-        let drain = slog_term::CompactFormat::new(decorator).build().fuse();
-        let drain = slog_async::Async::new(drain)
-            .chan_size(CHANNEL_SIZE)
-            .build()
-            .fuse();
-        let drain = slog::LevelFilter::new(drain, Level::Critical).fuse();
-        let log = slog::Logger::root(drain, o![]);
-        assert![!log.is_info_enabled()];
-        b.iter(|| {
-            black_box(slog::info![log, "{}", black_box("Message")]);
-        });
-    }
-
-    #[bench]
-    fn message_slog_enabled(b: &mut Bencher) {
-        let decorator = slog_term::PlainDecorator::new(Void {});
-        let drain = slog_term::CompactFormat::new(decorator).build().fuse();
-        let drain = slog_async::Async::new(drain)
-            .chan_size(CHANNEL_SIZE)
-            .build()
-            .fuse();
-        let log = slog::Logger::root(drain, o![]);
-        b.iter(|| {
-            black_box(slog::info![log, "{}", black_box("Message")]);
-        });
     }
 }
