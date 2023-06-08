@@ -290,7 +290,7 @@ use std::{
 /// }
 /// ```
 pub type Compatibility =
-    Box<dyn FnMut(u8, Box<dyn Fn(&mut fmt::Formatter) -> fmt::Result + Send + Sync>)>;
+    Box<dyn Fn(u8, Box<dyn Fn(&mut fmt::Formatter) -> fmt::Result + Send + Sync>)>;
 /// The logger which dependent crates should use
 pub type Logger<C> = LoggerV2Async<C>;
 
@@ -319,7 +319,7 @@ pub struct LoggerV2Async<C: Display + Send> {
 /// Trait for a generic logger, allows [Logpass] to pass [Generic] to this logger
 pub trait GenericLogger {
     /// Log a generic message, used by [Logpass]
-    fn log_generic(&mut self, level: u8, message: Generic);
+    fn log_generic(&self, level: u8, message: Generic);
     /// Consume this logger to create a logpass
     fn to_logpass(self) -> Logpass;
     /// Turn the logger into a function that takes messages
@@ -333,13 +333,13 @@ pub trait GenericLogger {
 }
 
 impl<C: 'static + Display + From<Generic> + Send> GenericLogger for LoggerV2Async<C> {
-    fn log_generic(&mut self, level: u8, message: Generic) {
+    fn log_generic(&self, level: u8, message: Generic) {
         self.log(level, message);
     }
     fn to_logpass(self) -> Logpass {
         Logpass::PassThrough(Box::new(self))
     }
-    fn to_compatibility(mut self) -> Compatibility {
+    fn to_compatibility(self) -> Compatibility {
         Box::new(move |level, writer| {
             self.log_generic(level, Generic(Arc::new(writer)));
         })
@@ -363,7 +363,7 @@ pub enum Logpass {
 
 impl Logpass {
     /// Logging function for the logpass
-    pub fn log(&mut self, level: u8, message: Generic) {
+    pub fn log(&self, level: u8, message: Generic) {
         match self {
             Logpass::Compatibility(compat) => {
                 (compat)(level, Box::new(move |f| write!(f, "{}", message)))
@@ -694,7 +694,7 @@ impl<C: 'static + Display + Send> LoggerV2Async<C> {
     /// Whenever the logger receives a message, it will use the context-to-level
     /// mapping to see if the message should be logged or not.
     /// Note that this happens after checking the global log level.
-    pub fn set_context_specific_log_level(&mut self, ctx: &str, level: u8) -> bool {
+    pub fn set_context_specific_log_level(&self, ctx: &str, level: u8) -> bool {
         if let Ok(ref mut lvl) = self.context_specific_level.lock() {
             if let Some(stored_level) = lvl.get_mut(ctx) {
                 *stored_level = level;
@@ -705,7 +705,7 @@ impl<C: 'static + Display + Send> LoggerV2Async<C> {
     }
 
     /// Set the log level of this logger's associated context
-    pub fn set_this_log_level(&mut self, level: u8) {
+    pub fn set_this_log_level(&self, level: u8) {
         let ctx = if let Ok(ref mut ctxs) = self.context_map.lock() {
             ctxs.get(&self.context).unwrap().clone()
         } else {
@@ -715,16 +715,16 @@ impl<C: 'static + Display + Send> LoggerV2Async<C> {
     }
 
     /// Enable colorizing log output
-    pub fn set_colorize(&mut self, on: bool) {
+    pub fn set_colorize(&self, on: bool) {
         self.colorize.store(on, Ordering::Relaxed);
     }
 
     /// Check the current colorization status
-    pub fn get_colorize(&mut self) -> bool {
+    pub fn get_colorize(&self) -> bool {
         self.colorize.load(Ordering::Relaxed)
     }
 
-    fn log_internal(&mut self, level: u8, message: impl Into<C>) -> bool {
+    fn log_internal(&self, level: u8, message: impl Into<C>) -> bool {
         if level <= self.level.load(Ordering::Relaxed) {
             match self
                 .log_channel
@@ -748,7 +748,7 @@ impl<C: 'static + Display + Send> LoggerV2Async<C> {
     /// Generic logging function
     ///
     /// Send a message with a specific log-level.
-    pub fn log(&mut self, level: u8, message: impl Into<C>) {
+    pub fn log(&self, level: u8, message: impl Into<C>) {
         self.log_internal(level, message);
     }
 
@@ -756,33 +756,33 @@ impl<C: 'static + Display + Send> LoggerV2Async<C> {
     ///
     /// Does nothing when compiled without debug assertions
     #[cfg(not(debug_assertions))]
-    pub fn trace(&mut self, _: impl Into<C>) {}
+    pub fn trace(&self, _: impl Into<C>) {}
 
     /// Log an error message (level 255)
     ///
     /// Does nothing when compiled without debug assertions
     #[cfg(debug_assertions)]
-    pub fn trace(&mut self, message: impl Into<C>) {
+    pub fn trace(&self, message: impl Into<C>) {
         self.log(255, message)
     }
 
     /// Log an error message (level 192)
-    pub fn debug(&mut self, message: impl Into<C>) {
+    pub fn debug(&self, message: impl Into<C>) {
         self.log(192, message)
     }
 
     /// Log an error message (level 128)
-    pub fn info(&mut self, message: impl Into<C>) {
+    pub fn info(&self, message: impl Into<C>) {
         self.log(128, message)
     }
 
     /// Log an error message (level 64)
-    pub fn warn(&mut self, message: impl Into<C>) {
+    pub fn warn(&self, message: impl Into<C>) {
         self.log(64, message)
     }
 
     /// Log an error message (level 0)
-    pub fn error(&mut self, message: impl Into<C>) {
+    pub fn error(&self, message: impl Into<C>) {
         self.log(0, message)
     }
 }
@@ -792,7 +792,7 @@ impl<C: 'static + Display + Send> LoggerV2Async<C> {
     /// Generic logging function
     ///
     /// Send a message with a specific log-level.
-    pub fn log(&mut self, level: u8, message: impl Into<C>) -> bool {
+    pub fn log(&self, level: u8, message: impl Into<C>) -> bool {
         self.log_internal(level, message)
     }
 
@@ -800,7 +800,7 @@ impl<C: 'static + Display + Send> LoggerV2Async<C> {
     ///
     /// Does nothing when compiled without debug assertions
     #[cfg(not(debug_assertions))]
-    pub fn trace(&mut self, _: impl Into<C>) -> bool {
+    pub fn trace(&self, _: impl Into<C>) -> bool {
         false
     }
 
@@ -808,27 +808,27 @@ impl<C: 'static + Display + Send> LoggerV2Async<C> {
     ///
     /// Does nothing when compiled without debug assertions
     #[cfg(debug_assertions)]
-    pub fn trace(&mut self, message: impl Into<C>) -> bool {
+    pub fn trace(&self, message: impl Into<C>) -> bool {
         self.log(255, message)
     }
 
     /// Log an error message (level 192)
-    pub fn debug(&mut self, message: impl Into<C>) -> bool {
+    pub fn debug(&self, message: impl Into<C>) -> bool {
         self.log(192, message)
     }
 
     /// Log an error message (level 128)
-    pub fn info(&mut self, message: impl Into<C>) -> bool {
+    pub fn info(&self, message: impl Into<C>) -> bool {
         self.log(128, message)
     }
 
     /// Log an error message (level 64)
-    pub fn warn(&mut self, message: impl Into<C>) -> bool {
+    pub fn warn(&self, message: impl Into<C>) -> bool {
         self.log(64, message)
     }
 
     /// Log an error message (level 0)
-    pub fn error(&mut self, message: impl Into<C>) -> bool {
+    pub fn error(&self, message: impl Into<C>) -> bool {
         self.log(0, message)
     }
 }
