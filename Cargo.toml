@@ -1,11 +1,11 @@
 [package]
 name = "fast-logger"
 version = "0.6.0"
-authors = ["Erlend Hofstad Langseth <3rlendhl@gmail.com>", "Kevin Robert Stravers <macocio@gmail.com>"]
-edition = "2018"
+authors = ["Erlend Hofstad Langseth <3rlendhl@gmail.com>", "Kevin Robert Stravers <kevin@stravers.net>"]
+edition = "2021"
 description = "Fast logger for Rust"
-homepage = "https://github.com/BourgondAries/fast-logger"
-repository = "https://github.com/BourgondAries/fast-logger"
+homepage = "https://github.com/kstrafe/fast-logger"
+repository = "https://github.com/kstrafe/fast-logger"
 keywords = ["log", "logger", "logging"]
 license = "LGPL-3.0-or-later"
 
@@ -14,16 +14,16 @@ name = "fast_logger"
 path = "lib.rs"
 
 [dependencies]
-chrono = "0.4.7"
-colored = "1.8"
-crossbeam-channel = "0.3.9"
+chrono = "0.4.26"
+colored = "2.0.0"
+crossbeam-channel = "0.5.8"
 
 [dev-dependencies]
-criterion = "0.3.0"
-regex = "1.2.1"
-slog = "2.5.2"
-slog-async = "2.3"
-slog-term = "2.4.1"
+criterion = "0.5.1"
+regex = "1.8.4"
+slog = "2.7.0"
+slog-async = "2.7.0"
+slog-term = "2.9.0"
 
 [[bench]]
 name = "benchmark"
