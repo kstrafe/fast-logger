@@ -46,7 +46,7 @@
 //!
 //! fn main() {
 //!     let mut logger = Logger::<Generic>::spawn("context");
-//!     info![logger, "Message {}", "More"; "key" => "value", "three" => 3];
+//!     info!(logger, "Message {}", "More"; "key" => "value", "three" => 3);
 //! }
 //! ```
 //! The other macros are [trace!], [debug!], [warn!], [error!], and the generic [log!].
@@ -63,7 +63,7 @@
 //! impl std::fmt::Display for MyMsg {
 //!     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
 //!         match self {
-//!             MyMsg::Static(string) => write![f, "{}", string],
+//!             MyMsg::Static(string) => write!(f, "{}", string),
 //!             MyMsg::Dynamic(handle) => handle.fmt(f),
 //!         }
 //!     }
@@ -78,7 +78,7 @@
 //! fn main() {
 //!     // Setup
 //!     let mut logger = Logger::<MyMsg>::spawn("context");
-//!     info![logger, "Message {}", "More"; "key" => "value", "three" => 3];
+//!     info!(logger, "Message {}", "More"; "key" => "value", "three" => 3);
 //! }
 //! ```
 //!
@@ -100,7 +100,7 @@
 //! impl std::fmt::Display for MyMessageEnum {
 //!     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
 //!         match self {
-//!             MyMessageEnum::SimpleMessage(string) => write![f, "{}", string],
+//!             MyMessageEnum::SimpleMessage(string) => write!(f, "{}", string),
 //!         }
 //!     }
 //! }
@@ -137,7 +137,7 @@
 //! impl std::fmt::Display for MyMessageEnum {
 //!     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
 //!         match self {
-//!             MyMessageEnum::SimpleMessage(string) => write![f, "{}", string],
+//!             MyMessageEnum::SimpleMessage(string) => write!(f, "{}", string),
 //!         }
 //!     }
 //! }
@@ -148,7 +148,7 @@
 //!
 //!     // Set the log level of `ctx` to 70, this filters
 //!     // All future log levels 71-255 out.
-//!     assert![logger.set_context_specific_log_level("ctx", 70)];
+//!     assert!(logger.set_context_specific_log_level("ctx", 70));
 //!
 //!     // This gets printed, because `warn` logs at level 64 <= 70
 //!     logger.warn(MyMessageEnum::SimpleMessage("1"));
@@ -178,7 +178,7 @@
 //!
 //!     // Set the log level of `ctx` to 70, this filters
 //!     // All future log levels 71-255 out.
-//!     assert![logger.set_context_specific_log_level("ctx", 70)];
+//!     assert!(logger.set_context_specific_log_level("ctx", 70));
 //!
 //!     // This gets printed, because `warn` logs at level 64 <= 70
 //!     logger.warn(format!("1"));
@@ -208,9 +208,9 @@
 //! fn main() {
 //!     let mut logger = Logger::<Generic>::spawn("context");
 //!     let my_struct = MyStruct();
-//!     info![logger, "Message {}", "More"; "key" => InDebug(&my_struct); clone
-//!     my_struct];
-//!     info![logger, "Message {}", "More"; "key" => InDebug(&my_struct)];
+//!     info!(logger, "Message {}", "More"; "key" => InDebug(&my_struct); clone
+//!     my_struct);
+//!     info!(logger, "Message {}", "More"; "key" => InDebug(&my_struct));
 //! }
 //! ```
 //!
@@ -225,7 +225,7 @@
 //!     let logger = Logger::<Generic>::spawn("context");
 //!     let submodule = logger.clone_add_context("submodule");
 //!     let mut something = submodule.clone_add_context("something");
-//!     info![something, "This message appears in the context: context-submodule-something"];
+//!     info!(something, "This message appears in the context: context-submodule-something");
 //! }
 //! ```
 #![deny(
@@ -281,7 +281,7 @@ use std::{
 ///             }
 ///         }
 ///         pub fn function(&mut self) {
-///             info![self.log, "Compatibility layer"];
+///             info!(self.log, "Compatibility layer");
 ///         }
 ///     }
 ///
@@ -366,7 +366,7 @@ impl Logpass {
     pub fn log(&mut self, level: u8, message: Generic) {
         match self {
             Logpass::Compatibility(compat) => {
-                (compat)(level, Box::new(move |f| write![f, "{}", message]))
+                (compat)(level, Box::new(move |f| write!(f, "{}", message)))
             }
             Logpass::PassThrough(passthrough) => passthrough.log_generic(level, message),
         }
@@ -627,7 +627,7 @@ impl<C: 'static + Display + Send> LoggerV2Async<C> {
         let ctxval = if let Ok(ref mut ctxmap) = self.context_map.lock() {
             ctxmap.insert(ctx.to_string()).expect("Context map is full")
         } else {
-            panic![];
+            panic!();
         };
 
         Logger {
@@ -651,7 +651,7 @@ impl<C: 'static + Display + Send> LoggerV2Async<C> {
             newctx = prev_ctx + "-" + ctx;
             ctxmap.insert(newctx.clone()).expect("Context map is full")
         } else {
-            panic![];
+            panic!();
         };
 
         if let Ok(ref mut lvl) = self.context_specific_level.lock() {
@@ -709,9 +709,9 @@ impl<C: 'static + Display + Send> LoggerV2Async<C> {
         let ctx = if let Ok(ref mut ctxs) = self.context_map.lock() {
             ctxs.get(&self.context).unwrap().clone()
         } else {
-            panic!["Unable to acquire context map lock"];
+            panic!("Unable to acquire context map lock");
         };
-        assert![self.set_context_specific_log_level(&ctx, level)];
+        assert!(self.set_context_specific_log_level(&ctx, level));
     }
 
     /// Enable colorizing log output
@@ -887,17 +887,17 @@ fn count_digits_base_10(mut number: usize) -> usize {
 
 fn colorize_level(level: u8) -> ColoredString {
     if level < 64 {
-        format!["{:03}", level].red()
+        format!("{:03}", level).red()
     } else if level < 128 {
-        format!["{:03}", level].yellow()
+        format!("{:03}", level).yellow()
     } else if level < 192 {
-        format!["{:03}", level].green()
+        format!("{:03}", level).green()
     } else if level < 255 {
-        format!["{:03}", level].cyan()
+        format!("{:03}", level).cyan()
     } else if level == 255 {
-        format!["{:03}", level].magenta()
+        format!("{:03}", level).magenta()
     } else {
-        unreachable![]
+        unreachable!()
     }
 }
 
@@ -912,7 +912,7 @@ fn do_write_nocolor<W: std::io::Write, T: Display>(
 ) -> std::io::Result<()> {
     if newlines > 1 {
         for (idx, line) in msg.lines().enumerate() {
-            writeln![
+            writeln!(
                 writer,
                 "{}: {:03} {} [{:0width$}/{}]: {}",
                 now,
@@ -922,17 +922,17 @@ fn do_write_nocolor<W: std::io::Write, T: Display>(
                 newlines,
                 line,
                 width = count_digits_base_10(newlines),
-            ]?;
+            )?;
         }
         if last_is_line {
-            writeln![
+            writeln!(
                 writer,
                 "{}: {:03} {} [{}/{}]: ",
                 now, lvl, ctx, newlines, newlines
-            ]?;
+            )?;
         }
     } else {
-        writeln![writer, "{}: {:03} {}: {}", now, lvl, ctx, msg,]?;
+        writeln!(writer, "{}: {:03} {}: {}", now, lvl, ctx, msg,)?;
     }
     Ok(())
 }
@@ -953,52 +953,52 @@ fn do_write_color<W: std::io::Write, T: Display>(
     match color_counter {
         0 => color = "blue",
         1 => color = "magenta",
-        _ => unimplemented![],
+        _ => unimplemented!(),
     }
     let msg_color;
     match color_counter {
         0 => msg_color = "bright blue",
         1 => msg_color = "bright magenta",
-        _ => unimplemented![],
+        _ => unimplemented!(),
     }
     let msg = msg.color(color);
     if newlines > 1 {
         for (idx, line) in msg.lines().enumerate() {
-            writeln![
+            writeln!(
                 writer,
                 "{}: {} {} {}: {}",
                 now.to_string().color(color),
                 colorize_level(lvl),
                 ctx.bright_green(),
-                format![
+                format!(
                     "[{:0width$}/{}]",
                     idx + 1,
                     newlines,
                     width = count_digits_base_10(newlines),
-                ]
+                )
                 .bright_yellow(),
                 line.color(msg_color),
-            ]?;
+            )?;
         }
         if last_is_line {
-            writeln![
+            writeln!(
                 writer,
                 "{}: {} {} {}: ",
                 now.to_string().color(color),
                 colorize_level(lvl),
                 ctx.bright_green(),
-                format!["[{}/{}]", newlines, newlines,].bright_yellow(),
-            ]?;
+                format!("[{}/{}]", newlines, newlines,).bright_yellow(),
+            )?;
         }
     } else {
-        writeln![
+        writeln!(
             writer,
             "{}: {} {}: {}",
             now.to_string().color(color),
             colorize_level(lvl),
             ctx.bright_green(),
             msg.color(msg_color),
-        ]?;
+        )?;
     }
     Ok(())
 }
@@ -1030,7 +1030,7 @@ fn do_write<C: Display + Send, W: std::io::Write>(
         ]
     };
     let now = Local::now().format_with_items(ITEMS.iter().cloned());
-    let msg = format!["{}", msg];
+    let msg = format!("{}", msg);
 
     let mut newlines = 1;
     let mut last_is_line = false;
@@ -1146,10 +1146,10 @@ fn logger_thread<C: Display + Send, W: std::io::Write>(
                                     &mut writer,
                                     LOGGER_QUIT_LEVEL,
                                     "logger",
-                                    format![
+                                    format!(
                                         "Unable to receive message. Exiting logger, reason={}",
                                         error
-                                    ],
+                                    ),
                                     color,
                                     &mut color_counter,
                                 );
@@ -1159,10 +1159,10 @@ fn logger_thread<C: Display + Send, W: std::io::Write>(
                                 &mut writer,
                                 LOGGER_QUIT_LEVEL,
                                 "logger",
-                                format![
+                                format!(
                                     "Unable to receive message. Exiting logger, reason={}",
                                     error
-                                ],
+                                ),
                                 color,
                                 &mut color_counter,
                             );
@@ -1181,10 +1181,10 @@ fn logger_thread<C: Display + Send, W: std::io::Write>(
                 &mut writer,
                 64,
                 "logger",
-                format![
+                format!(
                     "Logger dropped messages due to channel overflow, count={}",
                     dropped_messages
-                ],
+                ),
                 color,
                 &mut color_counter,
             )
@@ -1211,7 +1211,7 @@ pub struct InDebugPretty<'a, T: Debug>(pub &'a T);
 
 impl<'a, T: Debug> Display for InDebugPretty<'a, T> {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        write![f, "{:#?}", self.0]
+        write!(f, "{:#?}", self.0)
     }
 }
 
@@ -1239,11 +1239,12 @@ mod tests {
             r"^(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec) \d{1,2} \d+ \d{2}:\d{2}:\d{2}.\d{9}(\+|-)\d{4}: (.*)",
         )
         .unwrap();
-        regex.captures_iter(&line).next().unwrap()[3].to_string()
+        let x = regex.captures_iter(&line).next().unwrap()[3].to_string();
+        x
     }
 
     fn read_messages_without_date(delegate: fn(&mut Logger<Log>)) -> Vec<String> {
-        let store = Arc::new(Mutex::new(vec![]));
+        let store = Arc::new(Mutex::new(vec!()));
         let writer = Store {
             store: store.clone(),
         };
@@ -1263,7 +1264,7 @@ mod tests {
     impl Display for Log {
         fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
             match self {
-                Log::Static(str) => write![f, "{}", str],
+                Log::Static(str) => write!(f, "{}", str),
                 Log::Generic(generic) => generic.fmt(f),
             }
         }
@@ -1308,90 +1309,90 @@ mod tests {
     fn send_simple_string() {
         use std::fmt::Write;
         let mut logger = Logger::<String>::spawn("tst");
-        assert_eq![true, logger.info("Message")];
+        assert_eq!(true, logger.info("Message"));
         let mut writer = logger.make_writer(128);
-        write![writer, "Message 2"].unwrap();
+        write!(writer, "Message 2").unwrap();
         drop(writer);
     }
 
     #[test]
     fn send_successful_message() {
         let mut logger = Logger::<Log>::spawn("tst");
-        assert_eq![true, logger.info(Log::Static("Message"))];
+        assert_eq!(true, logger.info(Log::Static("Message")));
     }
 
     #[test]
     fn trace_is_disabled_by_default() {
         let mut logger = Logger::<Log>::spawn("tst");
-        assert_eq![false, logger.trace(Log::Static("Message"))];
+        assert_eq!(false, logger.trace(Log::Static("Message")));
     }
 
     #[test]
     fn debug_is_disabled_by_default() {
         let mut logger = Logger::<Log>::spawn("tst");
-        assert_eq![false, logger.debug(Log::Static("Message"))];
+        assert_eq!(false, logger.debug(Log::Static("Message")));
     }
 
     #[test]
     fn info_is_enabled_by_default() {
         let mut logger = Logger::<Log>::spawn("tst");
-        assert_eq![true, logger.info(Log::Static("Message"))];
+        assert_eq!(true, logger.info(Log::Static("Message")));
     }
 
     #[test]
     fn warn_is_enabled_by_default() {
         let mut logger = Logger::<Log>::spawn("tst");
-        assert_eq![true, logger.warn(Log::Static("Message"))];
+        assert_eq!(true, logger.warn(Log::Static("Message")));
     }
 
     #[test]
     fn error_is_enabled_by_default() {
         let mut logger = Logger::<Log>::spawn("tst");
-        assert_eq![true, logger.error(Log::Static("Message"))];
+        assert_eq!(true, logger.error(Log::Static("Message")));
     }
 
     #[test]
     fn custom_writer() {
         let writer = Void {};
         let mut logger = Logger::<Log>::spawn_with_writer("tst", writer);
-        assert_eq![true, logger.error(Log::Static("Message"))];
+        assert_eq!(true, logger.error(Log::Static("Message")));
     }
 
     #[test]
     fn count_digits() {
         for i in 0..10 {
-            assert_eq![1, count_digits_base_10(i)];
+            assert_eq!(1, count_digits_base_10(i));
         }
         for i in 10..100 {
-            assert_eq![2, count_digits_base_10(i)];
+            assert_eq!(2, count_digits_base_10(i));
         }
         for i in &[100usize, 123, 321, 980] {
-            assert_eq![3, count_digits_base_10(*i)];
+            assert_eq!(3, count_digits_base_10(*i));
         }
-        assert_eq![4, count_digits_base_10(1248)];
-        assert_eq![10, count_digits_base_10(01329583467)];
+        assert_eq!(4, count_digits_base_10(1248));
+        assert_eq!(10, count_digits_base_10(01329583467));
     }
 
     #[test]
     fn ensure_proper_message_format() {
-        let store = Arc::new(Mutex::new(vec![]));
+        let store = Arc::new(Mutex::new(vec!()));
         let writer = Store {
             store: store.clone(),
         };
         let mut logger = Logger::<Log>::spawn_with_writer("tst", writer);
-        assert_eq![true, logger.error(Log::Static("Message"))];
-        assert_eq![true, logger.error(Log::Static("Second message"))];
+        assert_eq!(true, logger.error(Log::Static("Message")));
+        assert_eq!(true, logger.error(Log::Static("Second message")));
         let regex = Regex::new(
             r"^(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec) \d{1,2} \d+ \d{2}:\d{2}:\d{2}.\d{9}(\+|-)\d{4}: 000 tst: Message\n",
         )
         .unwrap();
         drop(logger);
-        assert![regex.is_match(&String::from_utf8(store.lock().unwrap().to_vec()).unwrap())];
+        assert!(regex.is_match(&String::from_utf8(store.lock().unwrap().to_vec()).unwrap()));
     }
 
     #[test]
     fn ensure_ending_message_when_exit_1() {
-        let store = Arc::new(Mutex::new(vec![]));
+        let store = Arc::new(Mutex::new(vec!()));
         let writer = Store {
             store: store.clone(),
         };
@@ -1402,64 +1403,64 @@ mod tests {
         )
         .unwrap();
         drop(logger);
-        assert![regex.is_match(&String::from_utf8(store.lock().unwrap().to_vec()).unwrap())];
+        assert!(regex.is_match(&String::from_utf8(store.lock().unwrap().to_vec()).unwrap()));
     }
 
     #[test]
     fn ensure_ending_message_when_exit_2() {
-        let store = Arc::new(Mutex::new(vec![]));
+        let store = Arc::new(Mutex::new(vec!()));
         let writer = Store {
             store: store.clone(),
         };
         let logger = Logger::<Log>::spawn_with_writer("tst", writer);
         let regex = Regex::new(r"^$").unwrap();
         drop(logger);
-        assert![regex.is_match(&String::from_utf8(store.lock().unwrap().to_vec()).unwrap())];
+        assert!(regex.is_match(&String::from_utf8(store.lock().unwrap().to_vec()).unwrap()));
     }
 
     #[test]
     fn ensure_ending_message_when_exit_3() {
-        let store = Arc::new(Mutex::new(vec![]));
+        let store = Arc::new(Mutex::new(vec!()));
         let writer = Store {
             store: store.clone(),
         };
         let mut logger = Logger::<Log>::spawn_with_writer("tst", writer);
         logger.set_log_level(LOGGER_QUIT_LEVEL);
-        assert![logger.set_context_specific_log_level("logger", 195)];
+        assert!(logger.set_context_specific_log_level("logger", 195));
         let regex = Regex::new(r"^$").unwrap();
         drop(logger);
-        assert![regex.is_match(&String::from_utf8(store.lock().unwrap().to_vec()).unwrap())];
+        assert!(regex.is_match(&String::from_utf8(store.lock().unwrap().to_vec()).unwrap()));
     }
 
     #[test]
     fn spawn_void() {
         let mut logger = Logger::<Log>::spawn_void();
-        assert_eq![0, logger.get_log_level()];
-        assert_eq![true, logger.error(Log::Static("Message\n"))];
-        assert_eq![false, logger.warn(Log::Static("Message\n"))];
-        assert_eq![false, logger.info(Log::Static("Message\n"))];
-        assert_eq![false, logger.debug(Log::Static("Message\n"))];
-        assert_eq![false, logger.trace(Log::Static("Message\n"))];
+        assert_eq!(0, logger.get_log_level());
+        assert_eq!(true, logger.error(Log::Static("Message\n")));
+        assert_eq!(false, logger.warn(Log::Static("Message\n")));
+        assert_eq!(false, logger.info(Log::Static("Message\n")));
+        assert_eq!(false, logger.debug(Log::Static("Message\n")));
+        assert_eq!(false, logger.trace(Log::Static("Message\n")));
     }
 
     #[test]
     fn ensure_proper_message_format_line_ending_with_newline() {
-        let store = Arc::new(Mutex::new(vec![]));
+        let store = Arc::new(Mutex::new(vec!()));
         let writer = Store {
             store: store.clone(),
         };
         let mut logger = Logger::<Log>::spawn_with_writer("tst", writer);
-        assert_eq![true, logger.error(Log::Static("Message\n"))];
+        assert_eq!(true, logger.error(Log::Static("Message\n")));
         let regex = Regex::new(
             r"^(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec) \d{1,2} \d+ \d{2}:\d{2}:\d{2}.\d{9}(\+|-)\d{4}: 000 tst \[1/2\]: Message
 (Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec) \d{1,2} \d+ \d{2}:\d{2}:\d{2}.\d{9}(\+|-)\d{4}: 000 tst \[2/2\]: \n",
         )
         .unwrap();
         drop(logger);
-        assert![
+        assert!(
             regex.is_match(&String::from_utf8(store.lock().unwrap().to_vec()).unwrap()),
-            String::from_utf8(store.lock().unwrap().to_vec()).unwrap()
-        ];
+            "{}", String::from_utf8(store.lock().unwrap().to_vec()).unwrap()
+        );
     }
 
     #[test]
@@ -1469,107 +1470,107 @@ mod tests {
             let mut laminar = client.clone_add_context("laminar");
             // WARNING: Racy if setting the log level after sending a message, so we use error here
             // which guarantees arrival
-            error![laminar, "Hello world"];
+            error!(laminar, "Hello world");
             let mut vxdraw = laminar.clone_add_context("vxdraw");
-            warn![vxdraw, "Initializing something {}", "Something"];
+            warn!(vxdraw, "Initializing something {}", "Something");
             laminar.set_this_log_level(0);
-            warn![vxdraw, "A warning"];
-            warn![laminar, "Another warning"];
+            warn!(vxdraw, "A warning");
+            warn!(laminar, "Another warning");
         });
-        assert_eq![3, lines.len()];
-        assert_eq!["000 client-laminar: Hello world", lines[0]];
-        assert_eq![
+        assert_eq!(3, lines.len());
+        assert_eq!("000 client-laminar: Hello world", lines[0]);
+        assert_eq!(
             "064 client-laminar-vxdraw: Initializing something Something",
             lines[1]
-        ];
-        assert_eq!["064 client-laminar-vxdraw: A warning", lines[2]];
+        );
+        assert_eq!("064 client-laminar-vxdraw: A warning", lines[2]);
     }
 
     #[test]
     fn multistuff() {
         let lines = read_messages_without_date(|lgr| {
-            trace![lgr.clone_with_context("tracing"), "Message 1"];
-            debug![lgr.clone_with_context("debugging"), "Message 2"];
-            info![lgr.clone_with_context("infoing"), "Message 3"];
-            warn![lgr.clone_with_context("warning"), "Message 4"];
-            error![lgr.clone_with_context("erroring"), "Message 5"];
-            log![123, lgr.clone_with_context("logging"), "Message 6"];
-            assert![!lgr.set_context_specific_log_level("overdebug", 191)];
-            log![
+            trace!(lgr.clone_with_context("tracing"), "Message 1");
+            debug!(lgr.clone_with_context("debugging"), "Message 2");
+            info!(lgr.clone_with_context("infoing"), "Message 3");
+            warn!(lgr.clone_with_context("warning"), "Message 4");
+            error!(lgr.clone_with_context("erroring"), "Message 5");
+            log!(123, lgr.clone_with_context("logging"), "Message 6");
+            assert!(!lgr.set_context_specific_log_level("overdebug", 191));
+            log!(
                 191,
                 lgr.clone_with_context("overdebug"),
                 "This gets filtered"
-            ];
+            );
             lgr.set_log_level(191);
             let mut overdebug = lgr.clone_with_context("overdebug");
-            assert![lgr.set_context_specific_log_level("overdebug", 191)];
-            log![191, overdebug, "Just above debugging worked"];
+            assert!(lgr.set_context_specific_log_level("overdebug", 191));
+            log!(191, overdebug, "Just above debugging worked");
         });
-        assert_eq![5, lines.len()];
-        assert_eq!["128 infoing: Message 3", lines[0]];
-        assert_eq!["064 warning: Message 4", lines[1]];
-        assert_eq!["000 erroring: Message 5", lines[2]];
-        assert_eq!["123 logging: Message 6", lines[3]];
-        assert_eq!["191 overdebug: Just above debugging worked", lines[4]];
+        assert_eq!(5, lines.len());
+        assert_eq!("128 infoing: Message 3", lines[0]);
+        assert_eq!("064 warning: Message 4", lines[1]);
+        assert_eq!("000 erroring: Message 5", lines[2]);
+        assert_eq!("123 logging: Message 6", lines[3]);
+        assert_eq!("191 overdebug: Just above debugging worked", lines[4]);
     }
 
     #[test]
     fn multiple_lines_count_correctly() {
-        let store = Arc::new(Mutex::new(vec![]));
+        let store = Arc::new(Mutex::new(vec!()));
         let writer = Store {
             store: store.clone(),
         };
         let mut logger = Logger::<Log>::spawn_with_writer("tst", writer);
-        assert_eq![true, logger.error(Log::Static("Message\nPart\n2"))];
+        assert_eq!(true, logger.error(Log::Static("Message\nPart\n2")));
         let regex = Regex::new(
             r#"^(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec) \d{1,2} \d+ \d{2}:\d{2}:\d{2}.\d{9}(\+|-)\d{4}: 000 tst \[1/3\]: Message\n(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec) \d{1,2} \d+ \d{2}:\d{2}:\d{2}.\d{9}(\+|-)\d{4}: 000 tst \[2/3\]: Part\n(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec) \d{1,2} \d+ \d{2}:\d{2}:\d{2}.\d{9}(\+|-)\d{4}: 000 tst \[3/3\]: 2\n"#,
         )
         .unwrap();
         drop(logger);
-        assert![
+        assert!(
             regex.is_match(&String::from_utf8(store.lock().unwrap().to_vec()).unwrap()),
-            String::from_utf8(store.lock().unwrap().to_vec()).unwrap()
-        ];
+            "{}", String::from_utf8(store.lock().unwrap().to_vec()).unwrap()
+        );
     }
 
     #[test]
     fn multiple_lines_count_correctly_trailing() {
-        let store = Arc::new(Mutex::new(vec![]));
+        let store = Arc::new(Mutex::new(vec!()));
         let writer = Store {
             store: store.clone(),
         };
         let mut logger = Logger::<Log>::spawn_with_writer("tst", writer);
-        assert_eq![true, logger.error(Log::Static("Message\nPart\n2\n"))];
+        assert_eq!(true, logger.error(Log::Static("Message\nPart\n2\n")));
         let regex = Regex::new(
             r#"^(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec) \d{1,2} \d+ \d{2}:\d{2}:\d{2}.\d{9}(\+|-)\d{4}: 000 tst \[1/4\]: Message\n(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec) \d{1,2} \d+ \d{2}:\d{2}:\d{2}.\d{9}(\+|-)\d{4}: 000 tst \[2/4\]: Part\n(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec) \d{1,2} \d+ \d{2}:\d{2}:\d{2}.\d{9}(\+|-)\d{4}: 000 tst \[3/4\]: 2\n(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec) \d{1,2} \d+ \d{2}:\d{2}:\d{2}.\d{9}(\+|-)\d{4}: 000 tst \[4/4\]: \n"#,
         )
         .unwrap();
         drop(logger);
-        assert![
+        assert!(
             regex.is_match(&String::from_utf8(store.lock().unwrap().to_vec()).unwrap()),
-            String::from_utf8(store.lock().unwrap().to_vec()).unwrap()
-        ];
+            "{}", String::from_utf8(store.lock().unwrap().to_vec()).unwrap()
+        );
     }
 
     #[test]
     fn generic() {
         let mut logger = Logger::<Generic>::spawn("tst");
-        log![123, logger, "lorem {}", "ipsum"; "dolor" => "sit", "amet" => 1234];
-        trace![logger, "lorem {}", "ipsum"; "a" => "b"];
-        debug![logger, "lorem {}", "ipsum"; "a" => "b"];
-        info![logger, "lorem {}", "ipsum"; "a" => "b"];
-        warn![logger, "lorem {}", "ipsum"; "a" => "b"];
-        error![logger, "lorem {}", "ipsum"; "a" => "b"];
+        log!(123, logger, "lorem {}", "ipsum"; "dolor" => "sit", "amet" => 1234);
+        trace!(logger, "lorem {}", "ipsum"; "a" => "b");
+        debug!(logger, "lorem {}", "ipsum"; "a" => "b");
+        info!(logger, "lorem {}", "ipsum"; "a" => "b");
+        warn!(logger, "lorem {}", "ipsum"; "a" => "b");
+        error!(logger, "lorem {}", "ipsum"; "a" => "b");
 
         let ipsum = 1;
-        info![logger, "lorem {}", ipsum; "dolor" => "sit"];
+        info!(logger, "lorem {}", ipsum; "dolor" => "sit");
     }
 
     #[test]
     fn custom_writer_with_generic() {
         let mut logger = Logger::<Log>::spawn("tst");
-        assert_eq![true, logger.error(Log::Static("Message"))];
-        assert_eq![true, error![logger, "Message"]];
+        assert_eq!(true, logger.error(Log::Static("Message")));
+        assert_eq!(true, error!(logger, "Message"));
     }
 
     #[rustfmt::skip]
@@ -1577,98 +1578,98 @@ mod tests {
     fn ensure_all_macro_variants_can_be_used() {
         let mut logger = Logger::<Log>::spawn("tst");
 
-        assert_eq![false, trace![logger, "Message"]];
-        assert_eq![false, trace![logger, "Message",]];
-        assert_eq![false, trace![logger, "Message {}", "argument"]];
-        assert_eq![false, trace![logger, "Message {}", "argument",]];
-        assert_eq![false, trace![logger, "Message";]];
-        assert_eq![false, trace![logger, "Message"; "a" => "b"]];
-        assert_eq![false, trace![logger, "Message"; "a" => "b",]];
-        assert_eq![false, trace![logger, "Message",;]];
-        assert_eq![false, trace![logger, "Message",; "a" => "b"]];
-        assert_eq![false, trace![logger, "Message",; "a" => "b",]];
-        assert_eq![false, trace![logger, "Message {}", "argument";]];
-        assert_eq![false, trace![logger, "Message {}", "argument"; "a" => "b"]];
-        assert_eq![false, trace![logger, "Message {}", "argument"; "a" => "b",]];
-        assert_eq![false, trace![logger, "Message {}", "argument",;]];
-        assert_eq![false, trace![logger, "Message {}", "argument",; "a" => "b"]];
-        assert_eq![false, trace![logger, "Message {}", "argument",; "a" => "b",]];
+        assert_eq!(false, trace!(logger, "Message"));
+        assert_eq!(false, trace!(logger, "Message",));
+        assert_eq!(false, trace!(logger, "Message {}", "argument"));
+        assert_eq!(false, trace!(logger, "Message {}", "argument",));
+        assert_eq!(false, trace!(logger, "Message";));
+        assert_eq!(false, trace!(logger, "Message"; "a" => "b"));
+        assert_eq!(false, trace!(logger, "Message"; "a" => "b",));
+        assert_eq!(false, trace!(logger, "Message",;));
+        assert_eq!(false, trace!(logger, "Message",; "a" => "b"));
+        assert_eq!(false, trace!(logger, "Message",; "a" => "b",));
+        assert_eq!(false, trace!(logger, "Message {}", "argument";));
+        assert_eq!(false, trace!(logger, "Message {}", "argument"; "a" => "b"));
+        assert_eq!(false, trace!(logger, "Message {}", "argument"; "a" => "b",));
+        assert_eq!(false, trace!(logger, "Message {}", "argument",;));
+        assert_eq!(false, trace!(logger, "Message {}", "argument",; "a" => "b"));
+        assert_eq!(false, trace!(logger, "Message {}", "argument",; "a" => "b",));
 
-        assert_eq![false, debug![logger, "Message"]];
-        assert_eq![false, debug![logger, "Message",]];
-        assert_eq![false, debug![logger, "Message {}", "argument"]];
-        assert_eq![false, debug![logger, "Message {}", "argument",]];
-        assert_eq![false, debug![logger, "Message";]];
-        assert_eq![false, debug![logger, "Message"; "a" => "b"]];
-        assert_eq![false, debug![logger, "Message"; "a" => "b",]];
-        assert_eq![false, debug![logger, "Message",;]];
-        assert_eq![false, debug![logger, "Message",; "a" => "b"]];
-        assert_eq![false, debug![logger, "Message",; "a" => "b",]];
-        assert_eq![false, debug![logger, "Message {}", "argument";]];
-        assert_eq![false, debug![logger, "Message {}", "argument"; "a" => "b"]];
-        assert_eq![false, debug![logger, "Message {}", "argument"; "a" => "b",]];
-        assert_eq![false, debug![logger, "Message {}", "argument",;]];
-        assert_eq![false, debug![logger, "Message {}", "argument",; "a" => "b"]];
-        assert_eq![false, debug![logger, "Message {}", "argument",; "a" => "b",]];
+        assert_eq!(false, debug!(logger, "Message"));
+        assert_eq!(false, debug!(logger, "Message",));
+        assert_eq!(false, debug!(logger, "Message {}", "argument"));
+        assert_eq!(false, debug!(logger, "Message {}", "argument",));
+        assert_eq!(false, debug!(logger, "Message";));
+        assert_eq!(false, debug!(logger, "Message"; "a" => "b"));
+        assert_eq!(false, debug!(logger, "Message"; "a" => "b",));
+        assert_eq!(false, debug!(logger, "Message",;));
+        assert_eq!(false, debug!(logger, "Message",; "a" => "b"));
+        assert_eq!(false, debug!(logger, "Message",; "a" => "b",));
+        assert_eq!(false, debug!(logger, "Message {}", "argument";));
+        assert_eq!(false, debug!(logger, "Message {}", "argument"; "a" => "b"));
+        assert_eq!(false, debug!(logger, "Message {}", "argument"; "a" => "b",));
+        assert_eq!(false, debug!(logger, "Message {}", "argument",;));
+        assert_eq!(false, debug!(logger, "Message {}", "argument",; "a" => "b"));
+        assert_eq!(false, debug!(logger, "Message {}", "argument",; "a" => "b",));
 
-        assert_eq![true, info![logger, "Message"]];
-        assert_eq![true, info![logger, "Message",]];
-        assert_eq![true, info![logger, "Message {}", "argument"]];
-        assert_eq![true, info![logger, "Message {}", "argument",]];
-        assert_eq![true, info![logger, "Message";]];
-        assert_eq![true, info![logger, "Message"; "a" => "b"]];
-        assert_eq![true, info![logger, "Message"; "a" => "b",]];
-        assert_eq![true, info![logger, "Message",;]];
-        assert_eq![true, info![logger, "Message",; "a" => "b"]];
-        assert_eq![true, info![logger, "Message",; "a" => "b",]];
-        assert_eq![true, info![logger, "Message {}", "argument";]];
-        assert_eq![true, info![logger, "Message {}", "argument"; "a" => "b"]];
-        assert_eq![true, info![logger, "Message {}", "argument"; "a" => "b",]];
-        assert_eq![true, info![logger, "Message {}", "argument",;]];
-        assert_eq![true, info![logger, "Message {}", "argument",; "a" => "b"]];
-        assert_eq![true, info![logger, "Message {}", "argument",; "a" => "b",]];
+        assert_eq!(true, info!(logger, "Message"));
+        assert_eq!(true, info!(logger, "Message",));
+        assert_eq!(true, info!(logger, "Message {}", "argument"));
+        assert_eq!(true, info!(logger, "Message {}", "argument",));
+        assert_eq!(true, info!(logger, "Message";));
+        assert_eq!(true, info!(logger, "Message"; "a" => "b"));
+        assert_eq!(true, info!(logger, "Message"; "a" => "b",));
+        assert_eq!(true, info!(logger, "Message",;));
+        assert_eq!(true, info!(logger, "Message",; "a" => "b"));
+        assert_eq!(true, info!(logger, "Message",; "a" => "b",));
+        assert_eq!(true, info!(logger, "Message {}", "argument";));
+        assert_eq!(true, info!(logger, "Message {}", "argument"; "a" => "b"));
+        assert_eq!(true, info!(logger, "Message {}", "argument"; "a" => "b",));
+        assert_eq!(true, info!(logger, "Message {}", "argument",;));
+        assert_eq!(true, info!(logger, "Message {}", "argument",; "a" => "b"));
+        assert_eq!(true, info!(logger, "Message {}", "argument",; "a" => "b",));
 
-        assert_eq![true, warn![logger, "Message"]];
-        assert_eq![true, warn![logger, "Message",]];
-        assert_eq![true, warn![logger, "Message {}", "argument"]];
-        assert_eq![true, warn![logger, "Message {}", "argument",]];
-        assert_eq![true, warn![logger, "Message";]];
-        assert_eq![true, warn![logger, "Message"; "a" => "b"]];
-        assert_eq![true, warn![logger, "Message"; "a" => "b",]];
-        assert_eq![true, warn![logger, "Message",;]];
-        assert_eq![true, warn![logger, "Message",; "a" => "b"]];
-        assert_eq![true, warn![logger, "Message",; "a" => "b",]];
-        assert_eq![true, warn![logger, "Message {}", "argument";]];
-        assert_eq![true, warn![logger, "Message {}", "argument"; "a" => "b"]];
-        assert_eq![true, warn![logger, "Message {}", "argument"; "a" => "b",]];
-        assert_eq![true, warn![logger, "Message {}", "argument",;]];
-        assert_eq![true, warn![logger, "Message {}", "argument",; "a" => "b"]];
-        assert_eq![true, warn![logger, "Message {}", "argument",; "a" => "b",]];
+        assert_eq!(true, warn!(logger, "Message"));
+        assert_eq!(true, warn!(logger, "Message",));
+        assert_eq!(true, warn!(logger, "Message {}", "argument"));
+        assert_eq!(true, warn!(logger, "Message {}", "argument",));
+        assert_eq!(true, warn!(logger, "Message";));
+        assert_eq!(true, warn!(logger, "Message"; "a" => "b"));
+        assert_eq!(true, warn!(logger, "Message"; "a" => "b",));
+        assert_eq!(true, warn!(logger, "Message",;));
+        assert_eq!(true, warn!(logger, "Message",; "a" => "b"));
+        assert_eq!(true, warn!(logger, "Message",; "a" => "b",));
+        assert_eq!(true, warn!(logger, "Message {}", "argument";));
+        assert_eq!(true, warn!(logger, "Message {}", "argument"; "a" => "b"));
+        assert_eq!(true, warn!(logger, "Message {}", "argument"; "a" => "b",));
+        assert_eq!(true, warn!(logger, "Message {}", "argument",;));
+        assert_eq!(true, warn!(logger, "Message {}", "argument",; "a" => "b"));
+        assert_eq!(true, warn!(logger, "Message {}", "argument",; "a" => "b",));
 
-        assert_eq![true, error![logger, "Message"]];
-        assert_eq![true, error![logger, "Message",]];
-        assert_eq![true, error![logger, "Message {}", "argument"]];
-        assert_eq![true, error![logger, "Message {}", "argument",]];
-        assert_eq![true, error![logger, "Message";]];
-        assert_eq![true, error![logger, "Message"; "a" => "b"]];
-        assert_eq![true, error![logger, "Message"; "a" => "b",]];
-        assert_eq![true, error![logger, "Message",;]];
-        assert_eq![true, error![logger, "Message",; "a" => "b"]];
-        assert_eq![true, error![logger, "Message",; "a" => "b",]];
-        assert_eq![true, error![logger, "Message {}", "argument";]];
-        assert_eq![true, error![logger, "Message {}", "argument"; "a" => "b"]];
-        assert_eq![true, error![logger, "Message {}", "argument"; "a" => "b",]];
-        assert_eq![true, error![logger, "Message {}", "argument",;]];
-        assert_eq![true, error![logger, "Message {}", "argument",; "a" => "b"]];
-        assert_eq![true, error![logger, "Message {}", "argument",; "a" => "b",]];
+        assert_eq!(true, error!(logger, "Message"));
+        assert_eq!(true, error!(logger, "Message",));
+        assert_eq!(true, error!(logger, "Message {}", "argument"));
+        assert_eq!(true, error!(logger, "Message {}", "argument",));
+        assert_eq!(true, error!(logger, "Message";));
+        assert_eq!(true, error!(logger, "Message"; "a" => "b"));
+        assert_eq!(true, error!(logger, "Message"; "a" => "b",));
+        assert_eq!(true, error!(logger, "Message",;));
+        assert_eq!(true, error!(logger, "Message",; "a" => "b"));
+        assert_eq!(true, error!(logger, "Message",; "a" => "b",));
+        assert_eq!(true, error!(logger, "Message {}", "argument";));
+        assert_eq!(true, error!(logger, "Message {}", "argument"; "a" => "b"));
+        assert_eq!(true, error!(logger, "Message {}", "argument"; "a" => "b",));
+        assert_eq!(true, error!(logger, "Message {}", "argument",;));
+        assert_eq!(true, error!(logger, "Message {}", "argument",; "a" => "b"));
+        assert_eq!(true, error!(logger, "Message {}", "argument",; "a" => "b",));
 
         let value = 123;
-        assert_eq![false, trace![logger, "Message {}", value;; clone value]];
-        assert_eq![false, debug![logger, "Message {}", value;; clone value]];
-        assert_eq![true, info![logger, "Message {}", value;; clone value]];
-        assert_eq![true, warn![logger, "Message {}", value;; clone value]];
-        assert_eq![true, error![logger, "Message {}", value;; clone value]];
-        assert_eq![true, log![128, logger, "Message {}", value;; clone value]];
+        assert_eq!(false, trace!(logger, "Message {}", value;; clone value));
+        assert_eq!(false, debug!(logger, "Message {}", value;; clone value));
+        assert_eq!(true, info!(logger, "Message {}", value;; clone value));
+        assert_eq!(true, warn!(logger, "Message {}", value;; clone value));
+        assert_eq!(true, error!(logger, "Message {}", value;; clone value));
+        assert_eq!(true, log!(128, logger, "Message {}", value;; clone value));
     }
 
     #[test]
@@ -1689,19 +1690,19 @@ mod tests {
     fn test_spawn_test() {
         let mut logger = Logger::<Log>::spawn_test();
 
-        assert_eq![255, logger.get_log_level()];
+        assert_eq!(255, logger.get_log_level());
 
-        assert_eq![true, logger.get_colorize()];
+        assert_eq!(true, logger.get_colorize());
 
         #[cfg(debug_assertions)]
-        assert_eq![true, logger.trace(Log::Static("A trace message"))];
+        assert_eq!(true, logger.trace(Log::Static("A trace message")));
         #[cfg(not(debug_assertions))]
-        assert_eq![false, logger.trace(Log::Static("A trace message"))];
+        assert_eq!(false, logger.trace(Log::Static("A trace message")));
 
-        assert_eq![true, logger.debug(Log::Static("A debug message"))];
-        assert_eq![true, logger.info(Log::Static("An info message"))];
-        assert_eq![true, logger.warn(Log::Static("A warning message"))];
-        assert_eq![true, logger.error(Log::Static("An error message"))];
+        assert_eq!(true, logger.debug(Log::Static("A debug message")));
+        assert_eq!(true, logger.info(Log::Static("An info message")));
+        assert_eq!(true, logger.warn(Log::Static("A warning message")));
+        assert_eq!(true, logger.error(Log::Static("An error message")));
     }
 
     #[test]
@@ -1711,50 +1712,50 @@ mod tests {
         struct Value {}
         impl Debug for Value {
             fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-                write![f, "Debug Value"]
+                write!(f, "Debug Value")
             }
         }
         let value = Value {};
-        info![logger, "Message"; "value" => InDebug(&value); clone value];
-        info![logger, "Message"; "value" => InDebugPretty(&value); clone value];
+        info!(logger, "Message"; "value" => InDebug(&value); clone value);
+        info!(logger, "Message"; "value" => InDebugPretty(&value); clone value);
     }
 
     #[test]
     fn using_inhex() {
-        let store = Arc::new(Mutex::new(vec![]));
+        let store = Arc::new(Mutex::new(vec!()));
         let writer = Store {
             store: store.clone(),
         };
         let mut logger = Logger::<Log>::spawn_with_writer("tst", writer);
         logger.set_log_level(128);
 
-        info![logger, "Message"; "value" => InHex(&!127u32)];
+        info!(logger, "Message"; "value" => InHex(&!127u32));
 
         drop(logger);
-        assert_eq![
+        assert_eq!(
             "128 tst: Message, value=ffffff80",
             remove_time(&String::from_utf8(store.lock().unwrap().to_vec()).unwrap()),
-        ];
+        );
     }
 
     #[test]
     fn indebug() {
-        assert_eq!["[1, 2, 3]", format!["{}", InDebug(&[1, 2, 3])]];
-        assert_eq![
+        assert_eq!("[1, 2, 3]", format!("{}", InDebug(&[1, 2, 3])));
+        assert_eq!(
             "[\n    1,\n    2,\n    3,\n]",
-            format!["{}", InDebugPretty(&[1, 2, 3])]
-        ];
+            format!("{}", InDebugPretty(&[1, 2, 3]))
+        );
     }
 
     #[test]
     fn inhex() {
-        assert_eq!["ffffff80", format!["{}", InHex(&!127u32)]];
+        assert_eq!("ffffff80", format!("{}", InHex(&!127u32)));
     }
 
     #[test]
     fn logpass() {
         let mut logger = Logger::<Log>::spawn("tst").to_logpass();
-        info![logger, "Message"];
+        info!(logger, "Message");
     }
 
     #[test]
@@ -1770,7 +1771,7 @@ mod tests {
                 }
             }
             pub fn function(&mut self) {
-                info![self.log, "Compatibility layer"];
+                info!(self.log, "Compatibility layer");
             }
         }
 

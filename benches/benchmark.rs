@@ -1,6 +1,8 @@
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
-use fast_logger::{info, Generic, Logger, CHANNEL_SIZE};
+use fast_logger::{info, Generic, Logger};
 use std::fmt;
+
+static CHANNEL_SIZE: usize = 30_000;
 
 // ---
 
@@ -13,11 +15,11 @@ enum Log {
 impl fmt::Display for Log {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            Log::Static(str) => write![f, "{}", str],
+            Log::Static(str) => write!(f, "{}", str),
             Log::Complex(str, value, list) => {
-                write![f, "{} {}", str, value]?;
+                write!(f, "{} {}", str, value)?;
                 for i in list.iter() {
-                    write![f, "{}", i]?;
+                    write!(f, "{}", i)?;
                 }
                 Ok(())
             }
@@ -143,9 +145,9 @@ fn benchmark_slog(c: &mut Criterion) {
             .build()
             .fuse();
         let log = slog::Logger::root(drain, o![]);
-        assert![!log.is_trace_enabled()];
+        assert!(!log.is_trace_enabled());
         b.iter(|| {
-            black_box(slog::trace![log, "{}", black_box("Message")]);
+            black_box(slog::trace!(log, "{}", black_box("Message")));
         });
     });
 
@@ -158,9 +160,9 @@ fn benchmark_slog(c: &mut Criterion) {
             .build()
             .fuse();
         let log = slog::Logger::root(drain, o![]);
-        assert![log.is_info_enabled()];
+        assert!(log.is_info_enabled());
         b.iter(|| {
-            black_box(slog::info![log, "{}", black_box("Message")]);
+            black_box(slog::info!(log, "{}", black_box("Message")));
         });
     });
 
@@ -173,9 +175,9 @@ fn benchmark_slog(c: &mut Criterion) {
             .fuse();
         let drain = slog::LevelFilter::new(drain, Level::Critical).fuse();
         let log = slog::Logger::root(drain, o![]);
-        assert![!log.is_info_enabled()];
+        assert!(!log.is_info_enabled());
         b.iter(|| {
-            black_box(slog::info![log, "{}", black_box("Message")]);
+            black_box(slog::info!(log, "{}", black_box("Message")));
         });
     });
 
@@ -188,7 +190,7 @@ fn benchmark_slog(c: &mut Criterion) {
             .fuse();
         let log = slog::Logger::root(drain, o![]);
         b.iter(|| {
-            black_box(slog::info![log, "{}", black_box("Message")]);
+            black_box(slog::info!(log, "{}", black_box("Message")));
         });
     });
 }
