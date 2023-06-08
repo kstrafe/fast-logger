@@ -1,6 +1,6 @@
 [package]
 name = "fast-logger"
-version = "0.7.0"
+version = "0.7.1"
 authors = ["Erlend Hofstad Langseth <3rlendhl@gmail.com>", "Kevin Robert Stravers <kevin@stravers.net>"]
 edition = "2021"
 description = "Fast logger for Rust"

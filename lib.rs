@@ -45,7 +45,7 @@
 //! use fast_logger::{info, Generic, Logger};
 //!
 //! fn main() {
-//!     let mut logger = Logger::<Generic>::spawn("context");
+//!     let logger = Logger::<Generic>::spawn("context");
 //!     info!(logger, "Message {}", "More"; "key" => "value", "three" => 3);
 //! }
 //! ```
@@ -77,7 +77,7 @@
 //!
 //! fn main() {
 //!     // Setup
-//!     let mut logger = Logger::<MyMsg>::spawn("context");
+//!     let logger = Logger::<MyMsg>::spawn("context");
 //!     info!(logger, "Message {}", "More"; "key" => "value", "three" => 3);
 //! }
 //! ```
@@ -107,7 +107,7 @@
 //!
 //! fn main() {
 //!     // Setup
-//!     let mut logger = Logger::<MyMessageEnum>::spawn("ctx");
+//!     let logger = Logger::<MyMessageEnum>::spawn("ctx");
 //!
 //!     // Actual logging
 //!     logger.info(MyMessageEnum::SimpleMessage("Hello world!"));
@@ -144,7 +144,7 @@
 //!
 //! fn main() {
 //!     // Setup
-//!     let mut logger = Logger::<MyMessageEnum>::spawn("ctx");
+//!     let logger = Logger::<MyMessageEnum>::spawn("ctx");
 //!
 //!     // Set the log level of `ctx` to 70, this filters
 //!     // All future log levels 71-255 out.
@@ -174,7 +174,7 @@
 //!
 //! fn main() {
 //!     // Setup
-//!     let mut logger = Logger::<String>::spawn("ctx");
+//!     let logger = Logger::<String>::spawn("ctx");
 //!
 //!     // Set the log level of `ctx` to 70, this filters
 //!     // All future log levels 71-255 out.
@@ -206,7 +206,7 @@
 //! struct MyStruct();
 //!
 //! fn main() {
-//!     let mut logger = Logger::<Generic>::spawn("context");
+//!     let logger = Logger::<Generic>::spawn("context");
 //!     let my_struct = MyStruct();
 //!     info!(logger, "Message {}", "More"; "key" => InDebug(&my_struct); clone
 //!     my_struct);
@@ -267,9 +267,9 @@ use std::{
 /// ```
 /// use fast_logger::*;
 /// fn main() {
-///     let mut logger = Logger::<Generic>::spawn("tst");
+///     let logger = Logger::<Generic>::spawn("tst");
 ///
-///     type MyCompatibility = Box<dyn FnMut(u8, Box<dyn Fn(&mut std::fmt::Formatter) -> std::fmt::Result + Send + Sync>)>;
+///     type MyCompatibility = Box<dyn Fn(u8, Box<dyn Fn(&mut std::fmt::Formatter) -> std::fmt::Result + Send + Sync>)>;
 ///     struct MyLibrary {
 ///         log: Logpass,
 ///     }
@@ -680,7 +680,7 @@ impl<C: 'static + Display + Send> LoggerV2Async<C> {
     /// log statements that won't trigger because of the log-level
     /// absolutely fucking NUTS (so cheap it's basically
     /// non-existent).
-    pub fn set_log_level(&mut self, level: u8) {
+    pub fn set_log_level(&self, level: u8) {
         self.level.store(level, Ordering::Relaxed);
     }
 
@@ -838,9 +838,9 @@ impl<C: 'static + Display + Send + From<String>> LoggerV2Async<C> {
     ///
     /// Can be used to de-couple the logger dependency by passing aroung a writer instead of this
     /// logger.
-    pub fn make_writer(&mut self, level: u8) -> impl std::fmt::Write + '_ {
+    pub fn make_writer(&self, level: u8) -> impl std::fmt::Write + '_ {
         struct Writer<'a, C: Display + Send + From<String>> {
-            logger: &'a mut Logger<C>,
+            logger: &'a Logger<C>,
             level: u8,
         }
         impl<'a, C: 'static + Display + Send + From<String>> std::fmt::Write for Writer<'a, C> {
@@ -1243,13 +1243,13 @@ mod tests {
         x
     }
 
-    fn read_messages_without_date(delegate: fn(&mut Logger<Log>)) -> Vec<String> {
-        let store = Arc::new(Mutex::new(vec!()));
+    fn read_messages_without_date(delegate: fn(&Logger<Log>)) -> Vec<String> {
+        let store = Arc::new(Mutex::new(vec![]));
         let writer = Store {
             store: store.clone(),
         };
-        let mut logger = Logger::<Log>::spawn_with_writer("tst", writer);
-        delegate(&mut logger);
+        let logger = Logger::<Log>::spawn_with_writer("tst", writer);
+        delegate(&logger);
         drop(logger);
         let string = String::from_utf8(store.lock().unwrap().to_vec()).unwrap();
         string.lines().map(remove_time).collect()
@@ -1308,7 +1308,7 @@ mod tests {
     #[test]
     fn send_simple_string() {
         use std::fmt::Write;
-        let mut logger = Logger::<String>::spawn("tst");
+        let logger = Logger::<String>::spawn("tst");
         assert_eq!(true, logger.info("Message"));
         let mut writer = logger.make_writer(128);
         write!(writer, "Message 2").unwrap();
@@ -1317,44 +1317,44 @@ mod tests {
 
     #[test]
     fn send_successful_message() {
-        let mut logger = Logger::<Log>::spawn("tst");
+        let logger = Logger::<Log>::spawn("tst");
         assert_eq!(true, logger.info(Log::Static("Message")));
     }
 
     #[test]
     fn trace_is_disabled_by_default() {
-        let mut logger = Logger::<Log>::spawn("tst");
+        let logger = Logger::<Log>::spawn("tst");
         assert_eq!(false, logger.trace(Log::Static("Message")));
     }
 
     #[test]
     fn debug_is_disabled_by_default() {
-        let mut logger = Logger::<Log>::spawn("tst");
+        let logger = Logger::<Log>::spawn("tst");
         assert_eq!(false, logger.debug(Log::Static("Message")));
     }
 
     #[test]
     fn info_is_enabled_by_default() {
-        let mut logger = Logger::<Log>::spawn("tst");
+        let logger = Logger::<Log>::spawn("tst");
         assert_eq!(true, logger.info(Log::Static("Message")));
     }
 
     #[test]
     fn warn_is_enabled_by_default() {
-        let mut logger = Logger::<Log>::spawn("tst");
+        let logger = Logger::<Log>::spawn("tst");
         assert_eq!(true, logger.warn(Log::Static("Message")));
     }
 
     #[test]
     fn error_is_enabled_by_default() {
-        let mut logger = Logger::<Log>::spawn("tst");
+        let logger = Logger::<Log>::spawn("tst");
         assert_eq!(true, logger.error(Log::Static("Message")));
     }
 
     #[test]
     fn custom_writer() {
         let writer = Void {};
-        let mut logger = Logger::<Log>::spawn_with_writer("tst", writer);
+        let logger = Logger::<Log>::spawn_with_writer("tst", writer);
         assert_eq!(true, logger.error(Log::Static("Message")));
     }
 
@@ -1375,11 +1375,11 @@ mod tests {
 
     #[test]
     fn ensure_proper_message_format() {
-        let store = Arc::new(Mutex::new(vec!()));
+        let store = Arc::new(Mutex::new(vec![]));
         let writer = Store {
             store: store.clone(),
         };
-        let mut logger = Logger::<Log>::spawn_with_writer("tst", writer);
+        let logger = Logger::<Log>::spawn_with_writer("tst", writer);
         assert_eq!(true, logger.error(Log::Static("Message")));
         assert_eq!(true, logger.error(Log::Static("Second message")));
         let regex = Regex::new(
@@ -1392,11 +1392,11 @@ mod tests {
 
     #[test]
     fn ensure_ending_message_when_exit_1() {
-        let store = Arc::new(Mutex::new(vec!()));
+        let store = Arc::new(Mutex::new(vec![]));
         let writer = Store {
             store: store.clone(),
         };
-        let mut logger = Logger::<Log>::spawn_with_writer("tst", writer);
+        let logger = Logger::<Log>::spawn_with_writer("tst", writer);
         logger.set_log_level(LOGGER_QUIT_LEVEL);
         let regex = Regex::new(
             r"^(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec) \d{1,2} \d+ \d{2}:\d{2}:\d{2}.\d{9}(\+|-)\d{4}: 196 logger: Unable to receive message. Exiting logger, reason=receiving on an empty and disconnected channel\n$",
@@ -1408,7 +1408,7 @@ mod tests {
 
     #[test]
     fn ensure_ending_message_when_exit_2() {
-        let store = Arc::new(Mutex::new(vec!()));
+        let store = Arc::new(Mutex::new(vec![]));
         let writer = Store {
             store: store.clone(),
         };
@@ -1420,11 +1420,11 @@ mod tests {
 
     #[test]
     fn ensure_ending_message_when_exit_3() {
-        let store = Arc::new(Mutex::new(vec!()));
+        let store = Arc::new(Mutex::new(vec![]));
         let writer = Store {
             store: store.clone(),
         };
-        let mut logger = Logger::<Log>::spawn_with_writer("tst", writer);
+        let logger = Logger::<Log>::spawn_with_writer("tst", writer);
         logger.set_log_level(LOGGER_QUIT_LEVEL);
         assert!(logger.set_context_specific_log_level("logger", 195));
         let regex = Regex::new(r"^$").unwrap();
@@ -1434,7 +1434,7 @@ mod tests {
 
     #[test]
     fn spawn_void() {
-        let mut logger = Logger::<Log>::spawn_void();
+        let logger = Logger::<Log>::spawn_void();
         assert_eq!(0, logger.get_log_level());
         assert_eq!(true, logger.error(Log::Static("Message\n")));
         assert_eq!(false, logger.warn(Log::Static("Message\n")));
@@ -1445,11 +1445,11 @@ mod tests {
 
     #[test]
     fn ensure_proper_message_format_line_ending_with_newline() {
-        let store = Arc::new(Mutex::new(vec!()));
+        let store = Arc::new(Mutex::new(vec![]));
         let writer = Store {
             store: store.clone(),
         };
-        let mut logger = Logger::<Log>::spawn_with_writer("tst", writer);
+        let logger = Logger::<Log>::spawn_with_writer("tst", writer);
         assert_eq!(true, logger.error(Log::Static("Message\n")));
         let regex = Regex::new(
             r"^(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec) \d{1,2} \d+ \d{2}:\d{2}:\d{2}.\d{9}(\+|-)\d{4}: 000 tst \[1/2\]: Message
@@ -1459,7 +1459,8 @@ mod tests {
         drop(logger);
         assert!(
             regex.is_match(&String::from_utf8(store.lock().unwrap().to_vec()).unwrap()),
-            "{}", String::from_utf8(store.lock().unwrap().to_vec()).unwrap()
+            "{}",
+            String::from_utf8(store.lock().unwrap().to_vec()).unwrap()
         );
     }
 
@@ -1467,11 +1468,11 @@ mod tests {
     fn nested_contexts() {
         let lines = read_messages_without_date(|lgr| {
             let client = lgr.clone_with_context("client");
-            let mut laminar = client.clone_add_context("laminar");
+            let laminar = client.clone_add_context("laminar");
             // WARNING: Racy if setting the log level after sending a message, so we use error here
             // which guarantees arrival
             error!(laminar, "Hello world");
-            let mut vxdraw = laminar.clone_add_context("vxdraw");
+            let vxdraw = laminar.clone_add_context("vxdraw");
             warn!(vxdraw, "Initializing something {}", "Something");
             laminar.set_this_log_level(0);
             warn!(vxdraw, "A warning");
@@ -1502,7 +1503,7 @@ mod tests {
                 "This gets filtered"
             );
             lgr.set_log_level(191);
-            let mut overdebug = lgr.clone_with_context("overdebug");
+            let overdebug = lgr.clone_with_context("overdebug");
             assert!(lgr.set_context_specific_log_level("overdebug", 191));
             log!(191, overdebug, "Just above debugging worked");
         });
@@ -1516,11 +1517,11 @@ mod tests {
 
     #[test]
     fn multiple_lines_count_correctly() {
-        let store = Arc::new(Mutex::new(vec!()));
+        let store = Arc::new(Mutex::new(vec![]));
         let writer = Store {
             store: store.clone(),
         };
-        let mut logger = Logger::<Log>::spawn_with_writer("tst", writer);
+        let logger = Logger::<Log>::spawn_with_writer("tst", writer);
         assert_eq!(true, logger.error(Log::Static("Message\nPart\n2")));
         let regex = Regex::new(
             r#"^(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec) \d{1,2} \d+ \d{2}:\d{2}:\d{2}.\d{9}(\+|-)\d{4}: 000 tst \[1/3\]: Message\n(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec) \d{1,2} \d+ \d{2}:\d{2}:\d{2}.\d{9}(\+|-)\d{4}: 000 tst \[2/3\]: Part\n(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec) \d{1,2} \d+ \d{2}:\d{2}:\d{2}.\d{9}(\+|-)\d{4}: 000 tst \[3/3\]: 2\n"#,
@@ -1529,17 +1530,18 @@ mod tests {
         drop(logger);
         assert!(
             regex.is_match(&String::from_utf8(store.lock().unwrap().to_vec()).unwrap()),
-            "{}", String::from_utf8(store.lock().unwrap().to_vec()).unwrap()
+            "{}",
+            String::from_utf8(store.lock().unwrap().to_vec()).unwrap()
         );
     }
 
     #[test]
     fn multiple_lines_count_correctly_trailing() {
-        let store = Arc::new(Mutex::new(vec!()));
+        let store = Arc::new(Mutex::new(vec![]));
         let writer = Store {
             store: store.clone(),
         };
-        let mut logger = Logger::<Log>::spawn_with_writer("tst", writer);
+        let logger = Logger::<Log>::spawn_with_writer("tst", writer);
         assert_eq!(true, logger.error(Log::Static("Message\nPart\n2\n")));
         let regex = Regex::new(
             r#"^(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec) \d{1,2} \d+ \d{2}:\d{2}:\d{2}.\d{9}(\+|-)\d{4}: 000 tst \[1/4\]: Message\n(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec) \d{1,2} \d+ \d{2}:\d{2}:\d{2}.\d{9}(\+|-)\d{4}: 000 tst \[2/4\]: Part\n(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec) \d{1,2} \d+ \d{2}:\d{2}:\d{2}.\d{9}(\+|-)\d{4}: 000 tst \[3/4\]: 2\n(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec) \d{1,2} \d+ \d{2}:\d{2}:\d{2}.\d{9}(\+|-)\d{4}: 000 tst \[4/4\]: \n"#,
@@ -1548,13 +1550,14 @@ mod tests {
         drop(logger);
         assert!(
             regex.is_match(&String::from_utf8(store.lock().unwrap().to_vec()).unwrap()),
-            "{}", String::from_utf8(store.lock().unwrap().to_vec()).unwrap()
+            "{}",
+            String::from_utf8(store.lock().unwrap().to_vec()).unwrap()
         );
     }
 
     #[test]
     fn generic() {
-        let mut logger = Logger::<Generic>::spawn("tst");
+        let logger = Logger::<Generic>::spawn("tst");
         log!(123, logger, "lorem {}", "ipsum"; "dolor" => "sit", "amet" => 1234);
         trace!(logger, "lorem {}", "ipsum"; "a" => "b");
         debug!(logger, "lorem {}", "ipsum"; "a" => "b");
@@ -1568,7 +1571,7 @@ mod tests {
 
     #[test]
     fn custom_writer_with_generic() {
-        let mut logger = Logger::<Log>::spawn("tst");
+        let logger = Logger::<Log>::spawn("tst");
         assert_eq!(true, logger.error(Log::Static("Message")));
         assert_eq!(true, error!(logger, "Message"));
     }
@@ -1576,7 +1579,7 @@ mod tests {
     #[rustfmt::skip]
     #[test]
     fn ensure_all_macro_variants_can_be_used() {
-        let mut logger = Logger::<Log>::spawn("tst");
+        let logger = Logger::<Log>::spawn("tst");
 
         assert_eq!(false, trace!(logger, "Message"));
         assert_eq!(false, trace!(logger, "Message",));
@@ -1674,7 +1677,7 @@ mod tests {
 
     #[test]
     fn colorize() {
-        let mut logger = Logger::<Log>::spawn("tst");
+        let logger = Logger::<Log>::spawn("tst");
         logger.set_log_level(255);
         logger.set_colorize(true);
         logger.trace(Log::Static("A trace message"));
@@ -1688,7 +1691,7 @@ mod tests {
 
     #[test]
     fn test_spawn_test() {
-        let mut logger = Logger::<Log>::spawn_test();
+        let logger = Logger::<Log>::spawn_test();
 
         assert_eq!(255, logger.get_log_level());
 
@@ -1707,7 +1710,7 @@ mod tests {
 
     #[test]
     fn using_indebug() {
-        let mut logger = Logger::<Log>::spawn("tst");
+        let logger = Logger::<Log>::spawn("tst");
         #[derive(Clone)]
         struct Value {}
         impl Debug for Value {
@@ -1722,11 +1725,11 @@ mod tests {
 
     #[test]
     fn using_inhex() {
-        let store = Arc::new(Mutex::new(vec!()));
+        let store = Arc::new(Mutex::new(vec![]));
         let writer = Store {
             store: store.clone(),
         };
-        let mut logger = Logger::<Log>::spawn_with_writer("tst", writer);
+        let logger = Logger::<Log>::spawn_with_writer("tst", writer);
         logger.set_log_level(128);
 
         info!(logger, "Message"; "value" => InHex(&!127u32));
@@ -1754,7 +1757,7 @@ mod tests {
 
     #[test]
     fn logpass() {
-        let mut logger = Logger::<Log>::spawn("tst").to_logpass();
+        let logger = Logger::<Log>::spawn("tst").to_logpass();
         info!(logger, "Message");
     }
 
